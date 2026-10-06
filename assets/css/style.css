@@ -472,3 +472,210 @@ code{background:#06101a;border:1px solid #203c52;border-radius:5px;padding:2px 5
     }
 }
 
+
+
+/* ============================================================
+   STIMPACK LAB COMMUNITY
+   ============================================================ */
+
+.community-hero{
+  padding-bottom:46px;
+}
+
+.community-hero p:last-child{
+  max-width:820px;
+  font-size:16px;
+  line-height:1.75;
+}
+
+.community-section{
+  padding-top:42px;
+}
+
+.community-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  margin-bottom:18px;
+}
+
+.community-tabs{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.community-tab{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:38px;
+  padding:0 14px;
+  border:1px solid #244f70;
+  border-radius:999px;
+  background:#081a2a;
+  color:#9eb4c7;
+  font-size:13px;
+  font-weight:800;
+}
+
+.community-tab:hover{
+  color:#fff;
+  border-color:#2b89c6;
+}
+
+.community-tab.active{
+  color:#001522;
+  border-color:transparent;
+  background:linear-gradient(135deg,var(--cyan),var(--cyan2));
+}
+
+.community-compose{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:92px;
+  min-height:40px;
+  padding:0 16px;
+  border-radius:9px;
+  background:#0b8fe4;
+  color:#fff;
+  font-size:13px;
+  font-weight:900;
+  white-space:nowrap;
+}
+
+.community-compose.is-disabled{
+  opacity:.48;
+  cursor:not-allowed;
+}
+
+.community-board{
+  overflow:hidden;
+  border:1px solid #204969;
+  border-radius:14px;
+  background:rgba(7,25,41,.72);
+}
+
+.community-board-head,
+.community-row{
+  display:grid;
+  grid-template-columns:110px minmax(0,1fr) 120px;
+  gap:18px;
+  align-items:center;
+}
+
+.community-board-head{
+  min-height:48px;
+  padding:0 22px;
+  border-bottom:1px solid #1c405d;
+  background:#0b2033;
+  color:#7894aa;
+  font-size:12px;
+  font-weight:800;
+}
+
+.community-row{
+  min-height:82px;
+  padding:14px 22px;
+  border-bottom:1px solid #17364e;
+}
+
+.community-row:last-child{
+  border-bottom:0;
+}
+
+.community-row:hover{
+  background:rgba(14,59,90,.24);
+}
+
+.community-category{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:58px;
+  padding:6px 10px;
+  border-radius:999px;
+  background:#0a8ede;
+  color:#fff;
+  font-size:11px;
+  font-weight:900;
+}
+
+.community-main{
+  min-width:0;
+}
+
+.community-main h2{
+  margin:0;
+  color:#f5f9fd;
+  font-size:16px;
+  line-height:1.45;
+}
+
+.community-main p{
+  margin:4px 0 0;
+  color:#7892a8;
+  font-size:12px;
+}
+
+.community-row time{
+  color:#7f9ab1;
+  font-size:12px;
+  text-align:right;
+}
+
+.community-empty{
+  padding:58px 20px;
+  color:#7e98ae;
+  text-align:center;
+}
+
+.community-footnote{
+  margin-top:16px;
+  color:#6f899f;
+  font-size:12px;
+  line-height:1.65;
+}
+
+@media (max-width:700px){
+  .community-toolbar{
+    align-items:flex-start;
+  }
+
+  .community-board-head{
+    display:none;
+  }
+
+  .community-row{
+    grid-template-columns:auto minmax(0,1fr);
+    gap:10px 12px;
+    padding:16px;
+  }
+
+  .community-row time{
+    grid-column:2;
+    text-align:left;
+  }
+}
+
+@media (max-width:520px){
+  .community-toolbar{
+    flex-direction:column;
+  }
+
+  .community-compose{
+    align-self:flex-end;
+  }
+
+  .community-tab{
+    min-height:34px;
+    padding:0 11px;
+    font-size:12px;
+  }
+
+  .community-main h2{
+    font-size:15px;
+  }
+}
