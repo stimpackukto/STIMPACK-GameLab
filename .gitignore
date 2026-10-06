@@ -1,0 +1,94 @@
+# =========================
+# STIMPACK GAME LAB
+# Git 제외 파일
+# =========================
+
+# 사용자 업로드 / 생성 데이터
+uploads/
+data/catalog/
+
+# 임시 / 로그
+temp/
+logs/
+*.log
+
+# 환경 변수
+.env
+.env.*
+!.env.example
+
+# 인증서 / 개인키
+*.pem
+*.key
+
+# 서버 민감 설정
+/includes/config.php
+
+/reme/includes/config.php
+/reme/includes/sync_config.php
+
+/app/petrelay/config.php
+
+/api/community/config.php
+/api/community/lib/config.php
+/api/mp3/config.php
+
+/wow/includes/config.php
+/wow/Itemsender/include/config.php
+/wow/bus/bus_config.php
+/wow/reme/includes/config.php
+/wow/reme/includes/sync_config.php
+/wow/partials/account/tooltip_config.php
+/wow/api/community/config.php
+/wow/api/mp3/config.php
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Node.js dependencies
+node_modules/
+
+# 런타임 로그
+*.log
+
+# WoW 전체 제외
+wow/
+
+# Apache 전용 설정
+/api/mp3/.htaccess
+
+# Apache 설정 전체 제외
+.htaccess
+
+# MP3 운영 데이터
+/api/mp3/accounts_store.php
+/api/mp3/files/
+
+# STIMPACK GAME LAB 외 별도 서비스
+/app/
+/busanbus/
+/data/
+/reme/
+/temp/
+/test/
+/uploads/
+/wow/
+
+# 별도 API
+/api/mp3/
+/api/raid/
+
+# 서버 관리자 인증 전용
+/auth/nginx_admin_check.php
+
+# Reddit 개인 설정 예제
+/reddit/private-example/
+
+# 이미지 자산은 서버에서만 관리
+/assets/images/
+
+# 웹게임 전체 제외
+/games/
