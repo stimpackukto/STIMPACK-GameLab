@@ -156,6 +156,13 @@ $fullTitle =
         ? SITE_NAME
         : $pageTitle . ' | ' . SITE_NAME;
 
+/*
+ * 정적 파일 캐시 버전
+ * CSS/JS가 수정되면 filemtime 값이 바뀌어 브라우저가 새 파일을 즉시 받는다.
+ */
+$styleVersion = (string)(@filemtime(dirname(__DIR__) . '/assets/css/style.css') ?: '1');
+$scriptVersion = (string)(@filemtime(dirname(__DIR__) . '/assets/js/app.js') ?: '1');
+
 ?>
 <!doctype html>
 <html lang="ko">
@@ -184,12 +191,12 @@ $fullTitle =
 
     <link
         rel="stylesheet"
-        href="/assets/css/style.css"
+        href="/assets/css/style.css?v=<?= e($styleVersion) ?>"
     >
 
 
     <script
-        src="/assets/js/app.js"
+        src="/assets/js/app.js?v=<?= e($scriptVersion) ?>"
         defer
     ></script>
 
