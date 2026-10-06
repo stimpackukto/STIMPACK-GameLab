@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/includes/config.php';
-require_once dirname(__DIR__) . '/includes/data.php';
+require_once dirname(__DIR__) . '/includes/db.php';
 
 $pageTitle = 'STIMPACK LAB 커뮤니티';
 
@@ -13,57 +13,79 @@ if (!in_array($selectedCategory, $categories, true)) {
     $selectedCategory = '전체';
 }
 
-$communityFeed = [
-    [
-        'category' => '공지',
-        'title' => 'STIMPACK LAB 커뮤니티를 시작합니다',
-        'meta' => '게임 · 앱 · 개발 · 테스트 이야기를 한곳에서 나눕니다.',
-        'date' => '2026.10.06',
-    ],
-];
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 20;
+$offset = ($page - 1) * $perPage;
 
-foreach ($devlogs as $log) {
-    $tag = (string)($log['tag'] ?? '');
-    $category = '개발';
+$posts = [];
+$total = 0;
+$dbReady = true;
+$dbMessage = '';
 
-    if ($tag === '앱') {
-        $category = '앱';
-    } elseif (in_array($tag, ['게임', '크라임씬', '웹게임'], true)) {
-        $category = '게임';
+try {
+    $pdo = gamelab_db();
+
+    if ($selectedCategory === '전체') {
+        $countStmt = $pdo->query(
+            'SELECT COUNT(*) FROM gamelab_community_posts'
+        );
+        $total = (int)$countStmt->fetchColumn();
+
+        $stmt = $pdo->prepare(
+            'SELECT
+                id,
+                category,
+                title,
+                user_name,
+                is_admin,
+                view_count,
+                created_at
+             FROM gamelab_community_posts
+             ORDER BY
+                CASE WHEN category = "공지" THEN 0 ELSE 1 END,
+                id DESC
+             LIMIT :limit OFFSET :offset'
+        );
+    } else {
+        $countStmt = $pdo->prepare(
+            'SELECT COUNT(*)
+             FROM gamelab_community_posts
+             WHERE category = :category'
+        );
+        $countStmt->execute([
+            ':category' => $selectedCategory,
+        ]);
+        $total = (int)$countStmt->fetchColumn();
+
+        $stmt = $pdo->prepare(
+            'SELECT
+                id,
+                category,
+                title,
+                user_name,
+                is_admin,
+                view_count,
+                created_at
+             FROM gamelab_community_posts
+             WHERE category = :category
+             ORDER BY id DESC
+             LIMIT :limit OFFSET :offset'
+        );
+        $stmt->bindValue(':category', $selectedCategory);
     }
 
-    $communityFeed[] = [
-        'category' => $category,
-        'title' => (string)($log['title'] ?? ''),
-        'meta' => '개발 기록',
-        'date' => (string)($log['date'] ?? ''),
-    ];
+    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+
+    $posts = $stmt->fetchAll();
+
+} catch (Throwable $e) {
+    $dbReady = false;
+    $dbMessage = '커뮤니티 데이터베이스 준비가 필요합니다.';
 }
 
-foreach ($communityPosts as $post) {
-    $sourceCategory = (string)($post['category'] ?? '개발');
-
-    $category = match ($sourceCategory) {
-        '웹게임' => '게임',
-        'Android' => '앱',
-        '서버' => '개발',
-        default => in_array($sourceCategory, $categories, true) ? $sourceCategory : '개발',
-    };
-
-    $communityFeed[] = [
-        'category' => $category,
-        'title' => (string)($post['title'] ?? ''),
-        'meta' => (string)($post['meta'] ?? ''),
-        'date' => '',
-    ];
-}
-
-$visiblePosts = array_values(array_filter(
-    $communityFeed,
-    static fn(array $post): bool =>
-        $selectedCategory === '전체'
-        || $post['category'] === $selectedCategory
-));
+$totalPages = max(1, (int)ceil($total / $perPage));
 
 require dirname(__DIR__) . '/includes/header.php';
 ?>
@@ -99,50 +121,95 @@ require dirname(__DIR__) . '/includes/header.php';
                 <?php endforeach; ?>
             </nav>
 
-            <span
-                class="community-compose is-disabled"
-                title="게시 기능 준비 중"
-                aria-disabled="true"
+            <a
+                class="community-compose"
+                href="/community/write.php"
             >
                 새글 +
-            </span>
+            </a>
         </div>
 
-        <div class="community-board">
-            <div class="community-board-head">
-                <span>분류</span>
-                <span>제목</span>
-                <span>날짜</span>
+        <?php if (!$dbReady): ?>
+            <div class="notice-box community-db-notice">
+                <b>게시판 DB 설정이 필요합니다.</b>
+                <p><?= e($dbMessage) ?></p>
+            </div>
+        <?php else: ?>
+
+            <div class="community-board">
+                <div class="community-board-head">
+                    <span>분류</span>
+                    <span>제목</span>
+                    <span>작성자</span>
+                    <span>조회</span>
+                    <span>날짜</span>
+                </div>
+
+                <?php if ($posts): ?>
+                    <?php foreach ($posts as $post): ?>
+                        <article class="community-row <?= $post['category'] === '공지' ? 'is-notice' : '' ?>">
+                            <div>
+                                <span class="community-category">
+                                    <?= e((string)$post['category']) ?>
+                                </span>
+                            </div>
+
+                            <div class="community-main">
+                                <h2>
+                                    <a
+                                        class="community-title-link"
+                                        href="/community/view.php?id=<?= (int)$post['id'] ?>"
+                                    >
+                                        <?= e((string)$post['title']) ?>
+                                    </a>
+                                </h2>
+                            </div>
+
+                            <div class="community-author">
+                                <?= !empty($post['is_admin'])
+                                    ? '개발자'
+                                    : e((string)$post['user_name'])
+                                ?>
+                            </div>
+
+                            <div class="community-views">
+                                <?= number_format((int)$post['view_count']) ?>
+                            </div>
+
+                            <time>
+                                <?= e(date('Y.m.d', strtotime((string)$post['created_at']))) ?>
+                            </time>
+                        </article>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="community-empty">
+                        아직 등록된 글이 없습니다. 첫 글을 작성해보세요.
+                    </div>
+                <?php endif; ?>
             </div>
 
-            <?php if ($visiblePosts): ?>
-                <?php foreach ($visiblePosts as $post): ?>
-                    <article class="community-row">
-                        <div>
-                            <span class="community-category"><?= e($post['category']) ?></span>
-                        </div>
-
-                        <div class="community-main">
-                            <h2><?= e($post['title']) ?></h2>
-                            <?php if ($post['meta'] !== ''): ?>
-                                <p><?= e($post['meta']) ?></p>
-                            <?php endif; ?>
-                        </div>
-
-                        <time><?= e($post['date'] !== '' ? $post['date'] : '준비 중') ?></time>
-                    </article>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="community-empty">
-                    아직 이 카테고리에 등록된 글이 없습니다.
-                </div>
+            <?php if ($totalPages > 1): ?>
+                <nav class="community-pagination" aria-label="페이지 이동">
+                    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                        <?php
+                        $params = [];
+                        if ($selectedCategory !== '전체') {
+                            $params['category'] = $selectedCategory;
+                        }
+                        $params['page'] = $i;
+                        $pageUrl = '/community/?' . http_build_query($params);
+                        ?>
+                        <a
+                            class="<?= $i === $page ? 'active' : '' ?>"
+                            href="<?= e($pageUrl) ?>"
+                        >
+                            <?= $i ?>
+                        </a>
+                    <?php endfor; ?>
+                </nav>
             <?php endif; ?>
-        </div>
 
-        <div class="community-footnote">
-            현재는 STIMPACK GAME LAB의 기존 개발 기록과 토론 주제를 한곳에 모아 보여주고 있습니다.
-            글쓰기와 댓글 기능은 커뮤니티 게시 시스템 연결 후 활성화됩니다.
-        </div>
+        <?php endif; ?>
 
     </div>
 </section>
