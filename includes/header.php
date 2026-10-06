@@ -313,7 +313,7 @@ $fullTitle =
                 class="<?= is_active('/community') ? 'active' : '' ?>"
                 href="/community/"
             >
-                토론
+                커뮤니티
             </a>
 
 
