@@ -42,7 +42,7 @@ try {
                 created_at
              FROM gamelab_community_posts
              ORDER BY
-                CASE WHEN category = "공지" THEN 0 ELSE 1 END,
+                CASE WHEN category = \'공지\' THEN 0 ELSE 1 END,
                 id DESC
              LIMIT :limit OFFSET :offset'
         );
