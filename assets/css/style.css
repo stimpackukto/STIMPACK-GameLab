@@ -679,3 +679,242 @@ code{background:#06101a;border:1px solid #203c52;border-radius:5px;padding:2px 5
     font-size:15px;
   }
 }
+
+
+/* ============================================================
+   COMMUNITY BOARD DB
+   ============================================================ */
+
+.community-board-head,
+.community-row{
+  grid-template-columns:100px minmax(0,1fr) 120px 70px 110px;
+}
+
+.community-title-link{
+  color:#f5f9fd;
+}
+
+.community-title-link:hover{
+  color:var(--cyan);
+}
+
+.community-author,
+.community-views{
+  color:#8da4b8;
+  font-size:12px;
+}
+
+.community-views{
+  text-align:center;
+}
+
+.community-row.is-notice{
+  background:rgba(13,82,125,.16);
+}
+
+.community-row.is-notice .community-category{
+  background:#0eb2f0;
+}
+
+.community-pagination{
+  display:flex;
+  justify-content:center;
+  gap:8px;
+  margin-top:22px;
+}
+
+.community-pagination a{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:36px;
+  height:36px;
+  padding:0 10px;
+  border:1px solid #244f70;
+  border-radius:8px;
+  background:#081a2a;
+  color:#9db1c3;
+  font-size:13px;
+  font-weight:800;
+}
+
+.community-pagination a.active,
+.community-pagination a:hover{
+  color:#001522;
+  border-color:transparent;
+  background:linear-gradient(135deg,var(--cyan),var(--cyan2));
+}
+
+.community-db-notice{
+  margin-top:10px;
+}
+
+/* 글쓰기 */
+
+.community-write-wrap,
+.community-view-wrap{
+  max-width:900px;
+  margin:0 auto;
+}
+
+.community-write-card,
+.community-post-card{
+  padding:28px;
+  border:1px solid #214c6e;
+  border-radius:16px;
+  background:linear-gradient(145deg,#0d2237,#0a1929);
+}
+
+.community-login-card{
+  text-align:center;
+}
+
+.community-login-card h2{
+  margin-top:0;
+}
+
+.community-login-card p{
+  color:#9fb1c2;
+}
+
+.community-login-card .button{
+  margin:10px 5px 0;
+}
+
+.community-form label{
+  display:block;
+  margin:0 0 8px;
+  color:#fff;
+  font-weight:800;
+}
+
+.community-form input[type="text"],
+.community-form select,
+.community-form textarea{
+  width:100%;
+  margin:0 0 20px;
+  padding:13px 14px;
+  border:1px solid #315a78;
+  border-radius:8px;
+  background:#fff;
+  color:#111;
+  font:inherit;
+}
+
+.community-form textarea{
+  min-height:360px;
+  resize:vertical;
+  line-height:1.7;
+}
+
+.community-writer-line{
+  display:flex;
+  gap:14px;
+  align-items:center;
+  margin-bottom:22px;
+  padding:13px 15px;
+  border:1px solid #244b68;
+  border-radius:10px;
+  background:rgba(9,39,61,.75);
+  color:#8ea5b9;
+}
+
+.community-writer-line strong{
+  color:#fff;
+}
+
+.community-form-error{
+  margin-bottom:20px;
+  padding:14px 16px;
+  border:1px solid rgba(255,84,103,.45);
+  border-radius:10px;
+  background:rgba(120,20,35,.34);
+  color:#fff;
+}
+
+.community-form-buttons,
+.community-post-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+
+.community-post-top{
+  padding-bottom:22px;
+  border-bottom:1px solid #21445f;
+}
+
+.community-post-top h1{
+  margin:14px 0 16px;
+  font-size:30px;
+  line-height:1.35;
+}
+
+.community-post-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px 20px;
+  color:#8299ad;
+  font-size:12px;
+}
+
+.community-post-meta strong{
+  margin-left:5px;
+  color:#dce8f2;
+}
+
+.community-post-content{
+  min-height:260px;
+  padding:30px 4px;
+  color:#dce7f1;
+  font-size:15px;
+  line-height:1.9;
+  word-break:break-word;
+}
+
+.community-post-actions{
+  justify-content:flex-end;
+  padding-top:20px;
+  border-top:1px solid #21445f;
+}
+
+@media (max-width:800px){
+  .community-board-head{
+    display:none;
+  }
+
+  .community-row{
+    grid-template-columns:auto minmax(0,1fr);
+    gap:9px 12px;
+  }
+
+  .community-author,
+  .community-views,
+  .community-row time{
+    grid-column:2;
+    text-align:left;
+  }
+
+  .community-author::before{
+    content:"작성자 ";
+    color:#607b91;
+  }
+
+  .community-views::before{
+    content:"조회 ";
+    color:#607b91;
+  }
+
+  .community-write-card,
+  .community-post-card{
+    padding:20px;
+  }
+
+  .community-form textarea{
+    min-height:280px;
+  }
+
+  .community-post-top h1{
+    font-size:24px;
+  }
+}
