@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/data.php';
+require_once __DIR__ . '/includes/db.php';
 
 
 /* =========================================================
@@ -49,6 +50,45 @@ $isGameLabAdmin =
         trim($loginEmail),
         GAMELAB_ADMIN_EMAIL
     ) === 0;
+
+
+/* =========================================================
+ * HOME - 최신 커뮤니티 글
+ * ========================================================= */
+
+$homeCommunityPosts = [];
+
+try {
+
+    $pdo = gamelab_db();
+
+    $stmt = $pdo->query(
+        "
+        SELECT
+            id,
+            category,
+            title,
+            user_name,
+            created_at
+        FROM gamelab_community_posts
+        ORDER BY
+            CASE WHEN category = '공지' THEN 0 ELSE 1 END,
+            created_at DESC,
+            id DESC
+        LIMIT 6
+        "
+    );
+
+    $homeCommunityPosts = $stmt->fetchAll();
+
+} catch (Throwable $e) {
+
+    /*
+     * DB가 일시적으로 연결되지 않아도
+     * 홈페이지 전체가 깨지지 않도록 한다.
+     */
+    $homeCommunityPosts = [];
+}
 
 
 $pageTitle = SITE_NAME;
@@ -1412,160 +1452,90 @@ require __DIR__ . '/includes/header.php';
 
 
 <!-- =========================================================
-     COMMUNITY / DEV LOG
+     STIMPACK LAB COMMUNITY
 
      모두 공개
      ========================================================= -->
 
 <section class="section section-muted">
 
-    <div class="container split-grid">
+    <div class="container">
 
 
-        <!-- COMMUNITY -->
-
-        <div>
+        <div class="section-heading compact">
 
 
-            <div class="section-heading compact">
+            <div>
 
 
-                <div>
+                <p class="section-kicker">
+
+                    COMMUNITY
+
+                </p>
 
 
-                    <p class="section-kicker">
+                <h2>
 
-                        COMMUNITY
+                    STIMPACK LAB 커뮤니티
 
-                    </p>
-
-
-                    <h2>
-
-                        개발자 토론
-
-                    </h2>
+                </h2>
 
 
-                </div>
+                <p>
 
+                    게임 · 앱 · 개발 · 테스트 이야기를 한곳에서 나눕니다.
 
-                <a href="/community/">
-
-                    전체보기 →
-
-                </a>
+                </p>
 
 
             </div>
 
 
-            <div class="text-list">
+            <a href="/community/">
 
+                전체보기 →
 
-                <?php foreach ($communityPosts as $post): ?>
-
-
-                    <a href="/community/">
-
-
-                        <span class="list-tag">
-
-                            <?= e($post['category']) ?>
-
-                        </span>
-
-
-                        <b>
-
-                            <?= e($post['title']) ?>
-
-                        </b>
-
-
-                        <small>
-
-                            <?= e($post['meta']) ?>
-
-                        </small>
-
-
-                    </a>
-
-
-                <?php endforeach; ?>
-
-
-            </div>
+            </a>
 
 
         </div>
 
 
-        <!-- DEV LOG -->
-
-        <div>
+        <div class="text-list home-community-list">
 
 
-            <div class="section-heading compact">
+            <?php if ($homeCommunityPosts): ?>
 
 
-                <div>
+                <?php foreach ($homeCommunityPosts as $post): ?>
 
 
-                    <p class="section-kicker">
-
-                        DEV LOG
-
-                    </p>
-
-
-                    <h2>
-
-                        최근 개발일지
-
-                    </h2>
-
-
-                </div>
-
-
-                <a href="/devlog/">
-
-                    전체보기 →
-
-                </a>
-
-
-            </div>
-
-
-            <div class="text-list">
-
-
-                <?php foreach ($devlogs as $log): ?>
-
-
-                    <a href="/devlog/">
+                    <a href="/community/view.php?id=<?= (int)$post['id'] ?>">
 
 
                         <span class="list-tag">
 
-                            <?= e($log['tag']) ?>
+                            <?= e((string)$post['category']) ?>
 
                         </span>
 
 
                         <b>
 
-                            <?= e($log['title']) ?>
+                            <?= e((string)$post['title']) ?>
 
                         </b>
 
 
                         <small>
 
-                            <?= e($log['date']) ?>
+                            <?= e(
+                                date(
+                                    'Y.m.d',
+                                    strtotime((string)$post['created_at'])
+                                )
+                            ) ?>
 
                         </small>
 
@@ -1576,7 +1546,36 @@ require __DIR__ . '/includes/header.php';
                 <?php endforeach; ?>
 
 
-            </div>
+            <?php else: ?>
+
+
+                <a href="/community/">
+
+                    <span class="list-tag">
+
+                        커뮤니티
+
+                    </span>
+
+
+                    <b>
+
+                        아직 등록된 게시글이 없습니다.
+
+                    </b>
+
+
+                    <small>
+
+                        첫 글을 작성해보세요.
+
+                    </small>
+
+
+                </a>
+
+
+            <?php endif; ?>
 
 
         </div>
