@@ -308,13 +308,6 @@ $scriptVersion = (string)(@filemtime(dirname(__DIR__) . '/assets/js/app.js') ?: 
             </a>
 
 
-            <a
-                class="<?= is_active('/devlog') ? 'active' : '' ?>"
-                href="/devlog/"
-            >
-                개발일지
-            </a>
-
 
             <a
                 class="<?= is_active('/community') ? 'active' : '' ?>"
