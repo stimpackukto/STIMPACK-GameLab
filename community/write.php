@@ -128,8 +128,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
         exit;
 
-    } catch (Throwable $e) {
+    } catch (RuntimeException $e) {
         $error = $e->getMessage();
+
+    } catch (Throwable $e) {
+        $error = '게시판 데이터베이스에 연결할 수 없습니다. DB 테이블을 확인해주세요.';
     }
 }
 
