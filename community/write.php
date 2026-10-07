@@ -37,6 +37,104 @@ $formCategory = trim((string)($_POST['category'] ?? '자유'));
 $formTitle = trim((string)($_POST['title'] ?? ''));
 $formContent = trim((string)($_POST['content'] ?? ''));
 $error = '';
+$uploadedDiskPaths = [];
+
+function community_cleanup_uploaded_images(array $paths): void
+{
+    foreach ($paths as $path) {
+        if (is_string($path) && $path !== '' && is_file($path)) {
+            @unlink($path);
+        }
+    }
+}
+
+function community_store_uploaded_images(array $files): array
+{
+    if (
+        !isset($files['name'], $files['tmp_name'], $files['error'], $files['size'])
+        || !is_array($files['name'])
+    ) {
+        return [[], []];
+    }
+
+    $indexes = [];
+    foreach ($files['name'] as $index => $name) {
+        $error = (int)($files['error'][$index] ?? UPLOAD_ERR_NO_FILE);
+        if ($error !== UPLOAD_ERR_NO_FILE && trim((string)$name) !== '') {
+            $indexes[] = $index;
+        }
+    }
+
+    if (count($indexes) > 5) {
+        throw new RuntimeException('이미지는 한 글에 최대 5장까지 첨부할 수 있습니다.');
+    }
+
+    if ($indexes === []) {
+        return [[], []];
+    }
+
+    $root = dirname(__DIR__);
+    $relativeDir = '/uploads/community/' . date('Y/m');
+    $diskDir = $root . $relativeDir;
+
+    if (!is_dir($diskDir) && !mkdir($diskDir, 0755, true) && !is_dir($diskDir)) {
+        throw new RuntimeException('이미지 저장 폴더를 만들 수 없습니다.');
+    }
+
+    $allowed = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+    ];
+
+    $publicPaths = [];
+    $diskPaths = [];
+
+    foreach ($indexes as $index) {
+        $error = (int)($files['error'][$index] ?? UPLOAD_ERR_NO_FILE);
+        $tmp = (string)($files['tmp_name'][$index] ?? '');
+        $size = (int)($files['size'][$index] ?? 0);
+
+        if ($error !== UPLOAD_ERR_OK) {
+            throw new RuntimeException('이미지 업로드 중 오류가 발생했습니다.');
+        }
+
+        if ($size <= 0 || $size > 8 * 1024 * 1024) {
+            throw new RuntimeException('이미지는 장당 8MB 이하만 업로드할 수 있습니다.');
+        }
+
+        if ($tmp === '' || !is_uploaded_file($tmp)) {
+            throw new RuntimeException('올바른 업로드 파일이 아닙니다.');
+        }
+
+        $imageInfo = @getimagesize($tmp);
+        if ($imageInfo === false) {
+            throw new RuntimeException('이미지 파일만 첨부할 수 있습니다.');
+        }
+
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mime = (string)$finfo->file($tmp);
+
+        if (!isset($allowed[$mime])) {
+            throw new RuntimeException('JPG, PNG, WEBP 이미지만 첨부할 수 있습니다.');
+        }
+
+        $filename = bin2hex(random_bytes(16)) . '.' . $allowed[$mime];
+        $diskPath = $diskDir . '/' . $filename;
+        $publicPath = $relativeDir . '/' . $filename;
+
+        if (!move_uploaded_file($tmp, $diskPath)) {
+            throw new RuntimeException('이미지를 서버에 저장하지 못했습니다.');
+        }
+
+        @chmod($diskPath, 0644);
+
+        $diskPaths[] = $diskPath;
+        $publicPaths[] = $publicPath;
+    }
+
+    return [$publicPaths, $diskPaths];
+}
 
 if (!in_array($formCategory, $categories, true)) {
     $formCategory = '자유';
@@ -80,6 +178,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException('내용은 20,000자 이하로 작성해주세요.');
         }
 
+        [$uploadedPublicPaths, $uploadedDiskPaths] = community_store_uploaded_images(
+            $_FILES['images'] ?? []
+        );
+
+        $contentForDb = $formContent;
+        if ($uploadedPublicPaths !== []) {
+            $imageTokens = array_map(
+                static fn(string $path): string => '[[community-image:' . $path . ']]',
+                $uploadedPublicPaths
+            );
+            $contentForDb .= "\n\n" . implode("\n", $imageTokens);
+        }
+
         $pdo = gamelab_db();
 
         $stmt = $pdo->prepare(
@@ -114,7 +225,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([
             ':category' => $formCategory,
             ':title' => $formTitle,
-            ':content' => $formContent,
+            ':content' => $contentForDb,
             ':google_sub' => $identitySub,
             ':user_name' => $userName,
             ':user_email' => $userEmail,
@@ -129,10 +240,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
 
     } catch (RuntimeException $e) {
+        community_cleanup_uploaded_images($uploadedDiskPaths);
         $error = $e->getMessage();
 
     } catch (Throwable $e) {
-        $error = '게시판 데이터베이스에 연결할 수 없습니다. DB 테이블을 확인해주세요.';
+        community_cleanup_uploaded_images($uploadedDiskPaths);
+        $error = '게시글을 저장하는 중 오류가 발생했습니다.';
     }
 }
 
@@ -186,6 +299,7 @@ require dirname(__DIR__) . '/includes/header.php';
 
                     <form
                         method="post"
+                        enctype="multipart/form-data"
                         class="community-form"
                         autocomplete="off"
                     >
@@ -247,6 +361,28 @@ require dirname(__DIR__) . '/includes/header.php';
                             placeholder="내용을 입력하세요"
                         ><?= e($formContent) ?></textarea>
 
+                        <label for="community-images">
+                            이미지 첨부
+                        </label>
+
+                        <div class="community-image-upload">
+                            <input
+                                id="community-images"
+                                type="file"
+                                name="images[]"
+                                accept="image/jpeg,image/png,image/webp"
+                                multiple
+                            >
+                            <p>
+                                JPG · PNG · WEBP / 최대 5장 / 장당 8MB 이하
+                            </p>
+                            <div
+                                id="community-image-preview"
+                                class="community-image-preview"
+                                aria-live="polite"
+                            ></div>
+                        </div>
+
                         <div class="community-form-buttons">
                             <button
                                 type="submit"
@@ -270,5 +406,53 @@ require dirname(__DIR__) . '/includes/header.php';
         </div>
     </div>
 </section>
+
+<script>
+(() => {
+    const input = document.getElementById('community-images');
+    const preview = document.getElementById('community-image-preview');
+
+    if (!input || !preview) {
+        return;
+    }
+
+    input.addEventListener('change', () => {
+        preview.innerHTML = '';
+
+        const files = Array.from(input.files || []);
+
+        if (files.length > 5) {
+            preview.textContent = '이미지는 최대 5장까지 선택할 수 있습니다.';
+            return;
+        }
+
+        files.forEach((file) => {
+            if (!file.type.startsWith('image/')) {
+                return;
+            }
+
+            const item = document.createElement('div');
+            item.className = 'community-image-preview-item';
+
+            const image = document.createElement('img');
+            image.alt = file.name;
+            image.loading = 'lazy';
+
+            const reader = new FileReader();
+            reader.addEventListener('load', () => {
+                image.src = String(reader.result || '');
+            });
+            reader.readAsDataURL(file);
+
+            const name = document.createElement('span');
+            name.textContent = file.name;
+
+            item.appendChild(image);
+            item.appendChild(name);
+            preview.appendChild(item);
+        });
+    });
+})();
+</script>
 
 <?php require dirname(__DIR__) . '/includes/footer.php'; ?>
