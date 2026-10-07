@@ -57,6 +57,38 @@ try {
     $error = '커뮤니티 글을 불러올 수 없습니다.';
 }
 
+function community_render_post_content(string $content): string
+{
+    $pattern = '~\\[\\[community-image:(/uploads/community/[0-9]{4}/[0-9]{2}/[a-f0-9]{32}\\.(?:jpg|png|webp))\\]\\]~i';
+
+    $result = '';
+    $offset = 0;
+
+    if (preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE) !== false) {
+        foreach ($matches[0] as $index => $match) {
+            $token = (string)$match[0];
+            $position = (int)$match[1];
+            $path = (string)$matches[1][$index][0];
+
+            $before = substr($content, $offset, $position - $offset);
+            $result .= nl2br(e($before));
+
+            $safePath = e($path);
+            $result .= '<figure class="community-post-image">'
+                . '<a href="' . $safePath . '" target="_blank" rel="noopener noreferrer">'
+                . '<img src="' . $safePath . '" alt="첨부 이미지" loading="lazy">'
+                . '</a>'
+                . '</figure>';
+
+            $offset = $position + strlen($token);
+        }
+    }
+
+    $result .= nl2br(e(substr($content, $offset)));
+
+    return $result;
+}
+
 $pageTitle = $post
     ? (string)$post['title']
     : '커뮤니티 글';
@@ -127,7 +159,7 @@ require dirname(__DIR__) . '/includes/header.php';
                     </div>
 
                     <div class="community-post-content">
-                        <?= nl2br(e((string)$post['content'])) ?>
+                        <?= community_render_post_content((string)$post['content']) ?>
                     </div>
 
                     <div class="community-post-actions">
