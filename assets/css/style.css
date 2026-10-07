@@ -918,3 +918,93 @@ code{background:#06101a;border:1px solid #203c52;border-radius:5px;padding:2px 5
     font-size:24px;
   }
 }
+
+
+/* 커뮤니티 이미지 첨부 */
+.community-image-upload{
+  margin:0 0 22px;
+  padding:14px;
+  border:1px solid #315a78;
+  border-radius:10px;
+  background:rgba(5,22,36,.68);
+}
+
+.community-image-upload input[type="file"]{
+  display:block;
+  width:100%;
+  color:#dce8f2;
+  font:inherit;
+}
+
+.community-image-upload input[type="file"]::file-selector-button{
+  margin-right:10px;
+  padding:9px 13px;
+  border:1px solid #2b6c99;
+  border-radius:8px;
+  background:#0b8fe4;
+  color:#fff;
+  font-weight:800;
+  cursor:pointer;
+}
+
+.community-image-upload p{
+  margin:9px 0 0;
+  color:#7892a8;
+  font-size:12px;
+}
+
+.community-image-preview{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+  margin-top:12px;
+}
+
+.community-image-preview:empty{
+  display:none;
+}
+
+.community-image-preview-item{
+  min-width:0;
+  overflow:hidden;
+  border:1px solid #244b68;
+  border-radius:9px;
+  background:#071827;
+}
+
+.community-image-preview-item img{
+  width:100%;
+  aspect-ratio:16/10;
+  object-fit:cover;
+}
+
+.community-image-preview-item span{
+  display:block;
+  overflow:hidden;
+  padding:7px 8px;
+  color:#9fb3c5;
+  font-size:11px;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.community-post-image{
+  margin:22px 0;
+}
+
+.community-post-image img{
+  width:auto;
+  max-width:100%;
+  max-height:900px;
+  margin:0 auto;
+  border:1px solid #244b68;
+  border-radius:12px;
+  background:#06111c;
+  object-fit:contain;
+}
+
+@media (max-width:600px){
+  .community-image-preview{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
