@@ -42,7 +42,70 @@
         return Number(count || 0).toLocaleString('ko-KR');
     };
 
+    const ensureCountBadge = (link, slug) => {
+        const article =
+            link.closest('article')
+            || link.closest('.project-row')
+            || link.closest('.home-game-card')
+            || link.parentElement;
+
+        if (!article) {
+            return null;
+        }
+
+        const existing = article.querySelector(
+            '[data-game-count="' + CSS.escape(slug) + '"]'
+        );
+
+        if (existing) {
+            return existing;
+        }
+
+        /*
+         * /games/ 카드의 "웹게임 / 개발중" 뱃지 줄을 자동 탐색.
+         * 게임 페이지 소스가 Git에서 제외돼 있어도 공통 JS로 적용된다.
+         */
+        const spans = Array.from(article.querySelectorAll('span'));
+
+        const webGameBadge = spans.find((el) =>
+            String(el.textContent || '').trim() === '웹게임'
+        );
+
+        const devBadge = spans.find((el) => {
+            const text = String(el.textContent || '').trim();
+            return text === '개발중' || text === '운영중' || text === '공개';
+        });
+
+        const badgeRow =
+            (webGameBadge && webGameBadge.parentElement)
+            || (devBadge && devBadge.parentElement)
+            || article.querySelector('.home-game-badges');
+
+        if (!badgeRow) {
+            return null;
+        }
+
+        const badge = document.createElement('span');
+        badge.className = 'game-play-count-badge';
+        badge.dataset.gameCount = slug;
+        badge.textContent = '플레이 0회';
+
+        badgeRow.appendChild(badge);
+
+        return badge;
+    };
+
     const updateDisplays = (counts) => {
+        document.querySelectorAll('a[data-game-click-slug]').forEach((link) => {
+            const slug = String(
+                link.dataset.gameClickSlug || ''
+            ).toLowerCase();
+
+            if (slug) {
+                ensureCountBadge(link, slug);
+            }
+        });
+
         document.querySelectorAll('[data-game-count]').forEach((el) => {
             const slug = String(el.dataset.gameCount || '').toLowerCase();
 
@@ -51,7 +114,7 @@
             }
 
             const count = Number(counts[slug] || 0);
-            el.textContent = '▶ 플레이 ' + formatCount(count) + '회';
+            el.textContent = '플레이 ' + formatCount(count) + '회';
         });
     };
 
