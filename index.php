@@ -981,6 +981,16 @@ require __DIR__ . '/includes/header.php';
                             </span>
 
 
+                            <?php if ($gameSlug !== ''): ?>
+                                <span
+                                    class="game-play-count-badge"
+                                    data-game-count="<?= e($gameSlug) ?>"
+                                >
+                                    플레이 0회
+                                </span>
+                            <?php endif; ?>
+
+
                         </div>
 
 
@@ -1013,16 +1023,6 @@ require __DIR__ . '/includes/header.php';
                                 $game['url']
                             )
                         ): ?>
-
-
-                            <?php if ($gameSlug !== ''): ?>
-                                <span
-                                    class="home-game-play-count"
-                                    data-game-count="<?= e($gameSlug) ?>"
-                                >
-                                    ▶ 플레이 0회
-                                </span>
-                            <?php endif; ?>
 
 
                             <a
