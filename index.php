@@ -1027,7 +1027,7 @@ require __DIR__ . '/includes/header.php';
 
                             <a
                                 class="home-game-action"
-                                href="<?= e($gameUrl) ?>
+                                href="<?= e($gameUrl) ?>"
                                 <?= !empty(
                                     $game['external']
                                 )
