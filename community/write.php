@@ -48,6 +48,50 @@ function community_cleanup_uploaded_images(array $paths): void
     }
 }
 
+function community_load_image_resource(string $tmp, string $mime)
+{
+    if ($mime === 'image/jpeg' && function_exists('imagecreatefromjpeg')) {
+        return @imagecreatefromjpeg($tmp);
+    }
+
+    if ($mime === 'image/png' && function_exists('imagecreatefrompng')) {
+        return @imagecreatefrompng($tmp);
+    }
+
+    if ($mime === 'image/webp' && function_exists('imagecreatefromwebp')) {
+        return @imagecreatefromwebp($tmp);
+    }
+
+    return false;
+}
+
+function community_apply_jpeg_orientation($image, string $tmp)
+{
+    if (!function_exists('exif_read_data')) {
+        return $image;
+    }
+
+    $exif = @exif_read_data($tmp);
+    $orientation = (int)($exif['Orientation'] ?? 1);
+
+    if ($orientation === 3) {
+        $rotated = @imagerotate($image, 180, 0);
+    } elseif ($orientation === 6) {
+        $rotated = @imagerotate($image, -90, 0);
+    } elseif ($orientation === 8) {
+        $rotated = @imagerotate($image, 90, 0);
+    } else {
+        return $image;
+    }
+
+    if ($rotated !== false) {
+        imagedestroy($image);
+        return $rotated;
+    }
+
+    return $image;
+}
+
 function community_store_uploaded_images(array $files): array
 {
     if (
@@ -55,6 +99,12 @@ function community_store_uploaded_images(array $files): array
         || !is_array($files['name'])
     ) {
         return [[], []];
+    }
+
+    if (!function_exists('imagewebp')) {
+        throw new RuntimeException(
+            '서버의 PHP GD WebP 지원이 필요합니다. 관리자에게 문의해주세요.'
+        );
     }
 
     $indexes = [];
@@ -82,9 +132,9 @@ function community_store_uploaded_images(array $files): array
     }
 
     $allowed = [
-        'image/jpeg' => 'jpg',
-        'image/png' => 'png',
-        'image/webp' => 'webp',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
     ];
 
     $publicPaths = [];
@@ -92,43 +142,129 @@ function community_store_uploaded_images(array $files): array
 
     try {
         foreach ($indexes as $index) {
-        $error = (int)($files['error'][$index] ?? UPLOAD_ERR_NO_FILE);
-        $tmp = (string)($files['tmp_name'][$index] ?? '');
-        $size = (int)($files['size'][$index] ?? 0);
+            $error = (int)($files['error'][$index] ?? UPLOAD_ERR_NO_FILE);
+            $tmp = (string)($files['tmp_name'][$index] ?? '');
+            $size = (int)($files['size'][$index] ?? 0);
 
-        if ($error !== UPLOAD_ERR_OK) {
-            throw new RuntimeException('이미지 업로드 중 오류가 발생했습니다.');
-        }
+            if ($error !== UPLOAD_ERR_OK) {
+                throw new RuntimeException('이미지 업로드 중 오류가 발생했습니다.');
+            }
 
-        if ($size <= 0 || $size > 8 * 1024 * 1024) {
-            throw new RuntimeException('이미지는 장당 8MB 이하만 업로드할 수 있습니다.');
-        }
+            /*
+             * 이 제한은 임시 업로드 원본에 대한 안전 제한이다.
+             * 서버에 최종 저장되는 파일은 아래에서 WebP로 리사이즈/변환된다.
+             */
+            if ($size <= 0 || $size > 8 * 1024 * 1024) {
+                throw new RuntimeException('업로드 원본 이미지는 장당 8MB 이하만 가능합니다.');
+            }
 
-        if ($tmp === '' || !is_uploaded_file($tmp)) {
-            throw new RuntimeException('올바른 업로드 파일이 아닙니다.');
-        }
+            if ($tmp === '' || !is_uploaded_file($tmp)) {
+                throw new RuntimeException('올바른 업로드 파일이 아닙니다.');
+            }
 
-        $imageInfo = @getimagesize($tmp);
-        if ($imageInfo === false) {
-            throw new RuntimeException('이미지 파일만 첨부할 수 있습니다.');
-        }
+            $imageInfo = @getimagesize($tmp);
+            if ($imageInfo === false) {
+                throw new RuntimeException('이미지 파일만 첨부할 수 있습니다.');
+            }
 
-        $finfo = new finfo(FILEINFO_MIME_TYPE);
-        $mime = (string)$finfo->file($tmp);
+            $sourceWidth = (int)($imageInfo[0] ?? 0);
+            $sourceHeight = (int)($imageInfo[1] ?? 0);
 
-        if (!isset($allowed[$mime])) {
-            throw new RuntimeException('JPG, PNG, WEBP 이미지만 첨부할 수 있습니다.');
-        }
+            if ($sourceWidth <= 0 || $sourceHeight <= 0) {
+                throw new RuntimeException('이미지 크기를 확인할 수 없습니다.');
+            }
 
-        $filename = bin2hex(random_bytes(16)) . '.' . $allowed[$mime];
-        $diskPath = $diskDir . '/' . $filename;
-        $publicPath = $relativeDir . '/' . $filename;
+            if (($sourceWidth * $sourceHeight) > 50000000) {
+                throw new RuntimeException('이미지 해상도가 너무 큽니다.');
+            }
 
-        if (!move_uploaded_file($tmp, $diskPath)) {
-            throw new RuntimeException('이미지를 서버에 저장하지 못했습니다.');
-        }
+            $finfo = new finfo(FILEINFO_MIME_TYPE);
+            $mime = (string)$finfo->file($tmp);
 
-        @chmod($diskPath, 0644);
+            if (!in_array($mime, $allowed, true)) {
+                throw new RuntimeException('JPG, PNG, WEBP 이미지만 첨부할 수 있습니다.');
+            }
+
+            $source = community_load_image_resource($tmp, $mime);
+            if ($source === false) {
+                throw new RuntimeException('이미지를 변환할 수 없습니다. PHP GD 설정을 확인해주세요.');
+            }
+
+            if ($mime === 'image/jpeg') {
+                $source = community_apply_jpeg_orientation($source, $tmp);
+                $sourceWidth = imagesx($source);
+                $sourceHeight = imagesy($source);
+            }
+
+            /*
+             * 1920 x 1080 안에 들어오도록 비율을 유지한다.
+             * 작은 이미지는 불필요하게 확대하지 않는다.
+             */
+            $scale = min(
+                1.0,
+                1920 / $sourceWidth,
+                1080 / $sourceHeight
+            );
+
+            $targetWidth = max(1, (int)round($sourceWidth * $scale));
+            $targetHeight = max(1, (int)round($sourceHeight * $scale));
+
+            $target = imagecreatetruecolor($targetWidth, $targetHeight);
+            if ($target === false) {
+                imagedestroy($source);
+                throw new RuntimeException('이미지 리사이즈 메모리를 확보하지 못했습니다.');
+            }
+
+            /*
+             * PNG/WebP 투명 배경을 WebP에서도 유지한다.
+             */
+            imagealphablending($target, false);
+            imagesavealpha($target, true);
+            $transparent = imagecolorallocatealpha($target, 0, 0, 0, 127);
+            imagefilledrectangle(
+                $target,
+                0,
+                0,
+                $targetWidth,
+                $targetHeight,
+                $transparent
+            );
+
+            $resized = imagecopyresampled(
+                $target,
+                $source,
+                0,
+                0,
+                0,
+                0,
+                $targetWidth,
+                $targetHeight,
+                $sourceWidth,
+                $sourceHeight
+            );
+
+            imagedestroy($source);
+
+            if (!$resized) {
+                imagedestroy($target);
+                throw new RuntimeException('이미지 리사이즈에 실패했습니다.');
+            }
+
+            $filename = bin2hex(random_bytes(16)) . '.webp';
+            $diskPath = $diskDir . '/' . $filename;
+            $publicPath = $relativeDir . '/' . $filename;
+
+            /*
+             * WebP 품질 82: 게시판용 화질과 용량의 균형.
+             * 원본 JPEG/PNG/WebP 파일 자체는 서버에 저장하지 않는다.
+             */
+            if (!imagewebp($target, $diskPath, 82)) {
+                imagedestroy($target);
+                throw new RuntimeException('WebP 이미지 저장에 실패했습니다.');
+            }
+
+            imagedestroy($target);
+            @chmod($diskPath, 0644);
 
             $diskPaths[] = $diskPath;
             $publicPaths[] = $publicPath;
@@ -379,7 +515,7 @@ require dirname(__DIR__) . '/includes/header.php';
                                 multiple
                             >
                             <p>
-                                JPG · PNG · WEBP / 최대 5장 / 장당 8MB 이하
+                                JPG · PNG · WEBP / 최대 5장 / 최대 1920×1080으로 리사이즈 후 WebP 저장
                             </p>
                             <div
                                 id="community-image-preview"
