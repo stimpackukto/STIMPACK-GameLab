@@ -1023,3 +1023,20 @@ code{background:#06101a;border:1px solid #203c52;border-radius:5px;padding:2px 5
   font-weight:800;
   letter-spacing:.1px;
 }
+
+
+/* 게임별 플레이 횟수 뱃지 */
+.game-play-count-badge{
+  display:inline-flex !important;
+  align-items:center;
+  justify-content:center;
+  padding:6px 11px;
+  border-radius:999px;
+  border:1px solid rgba(72,187,255,.28);
+  background:rgba(14,165,233,.13);
+  color:#9bdcff;
+  font-size:13px;
+  font-weight:800;
+  line-height:1;
+  white-space:nowrap;
+}
