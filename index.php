@@ -897,6 +897,32 @@ require __DIR__ . '/includes/header.php';
                     }
                 }
 
+                $gameUrl = trim(
+                    (string)(
+                        $game['url']
+                        ?? ''
+                    )
+                );
+
+                $gameSlug = '';
+
+                $gamePath = (string)parse_url(
+                    $gameUrl,
+                    PHP_URL_PATH
+                );
+
+                if (
+                    preg_match(
+                        '~^/games/([a-zA-Z0-9_-]+)/?$~',
+                        $gamePath,
+                        $gameMatch
+                    )
+                ) {
+                    $gameSlug = strtolower(
+                        (string)$gameMatch[1]
+                    );
+                }
+
                 ?>
 
 
@@ -989,13 +1015,19 @@ require __DIR__ . '/includes/header.php';
                         ): ?>
 
 
+                            <?php if ($gameSlug !== ''): ?>
+                                <span
+                                    class="home-game-play-count"
+                                    data-game-count="<?= e($gameSlug) ?>"
+                                >
+                                    ▶ 플레이 0회
+                                </span>
+                            <?php endif; ?>
+
+
                             <a
                                 class="home-game-action"
-                                href="<?= e(
-                                    (string)$game[
-                                        'url'
-                                    ]
-                                ) ?>"
+                                href="<?= e($gameUrl) ?>
                                 <?= !empty(
                                     $game['external']
                                 )
