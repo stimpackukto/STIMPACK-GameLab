@@ -90,7 +90,8 @@ function community_store_uploaded_images(array $files): array
     $publicPaths = [];
     $diskPaths = [];
 
-    foreach ($indexes as $index) {
+    try {
+        foreach ($indexes as $index) {
         $error = (int)($files['error'][$index] ?? UPLOAD_ERR_NO_FILE);
         $tmp = (string)($files['tmp_name'][$index] ?? '');
         $size = (int)($files['size'][$index] ?? 0);
@@ -129,8 +130,12 @@ function community_store_uploaded_images(array $files): array
 
         @chmod($diskPath, 0644);
 
-        $diskPaths[] = $diskPath;
-        $publicPaths[] = $publicPath;
+            $diskPaths[] = $diskPath;
+            $publicPaths[] = $publicPath;
+        }
+    } catch (Throwable $e) {
+        community_cleanup_uploaded_images($diskPaths);
+        throw $e;
     }
 
     return [$publicPaths, $diskPaths];
