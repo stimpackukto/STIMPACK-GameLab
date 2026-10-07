@@ -1008,3 +1008,18 @@ code{background:#06101a;border:1px solid #203c52;border-radius:5px;padding:2px 5
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
 }
+
+/* =========================================================
+ * GAME CLICK COUNTER
+ * ========================================================= */
+.home-game-play-count,
+.game-play-count{
+  display:inline-flex;
+  align-items:center;
+  align-self:flex-start;
+  margin:0 0 10px;
+  color:#7f9db5;
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.1px;
+}
