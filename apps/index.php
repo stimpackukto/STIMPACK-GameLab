@@ -227,9 +227,32 @@ require dirname(__DIR__) . '/includes/header.php';
 }
 
 
+.purpose-toggle,
 .detail-toggle,
 .review-button {
     cursor: pointer;
+}
+
+
+.project-purpose-panel {
+    margin: 14px 0 18px;
+    padding: 16px 18px;
+    border: 1px solid rgba(25,184,255,.22);
+    border-radius: 12px;
+    background: rgba(5,25,40,.72);
+    color: #d8e7f7;
+    line-height: 1.75;
+}
+
+.project-purpose-panel[hidden] {
+    display: none;
+}
+
+.project-purpose-panel strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #7dd3fc;
+    font-size: 14px;
 }
 
 
@@ -779,6 +802,19 @@ require dirname(__DIR__) . '/includes/header.php';
         $safeId;
 
 
+    $purposeId =
+        'purpose-app-' .
+        $safeId;
+
+
+    $purpose = trim(
+        (string)(
+            $app['purpose']
+            ?? ''
+        )
+    );
+
+
     $reviewPanelId =
         'review-app-' .
         $safeId;
@@ -945,6 +981,23 @@ require dirname(__DIR__) . '/includes/header.php';
             </h2>
 
 
+            <?php if ($purpose !== ''): ?>
+
+                <div
+                    id="<?= e($purposeId) ?>"
+                    class="project-purpose-panel"
+                    hidden
+                >
+                    <strong>제작 의도</strong>
+
+                    <?= nl2br(
+                        e($purpose)
+                    ) ?>
+                </div>
+
+            <?php endif; ?>
+
+
             <!-- =============================================
                  설명
                  
@@ -976,6 +1029,23 @@ require dirname(__DIR__) . '/includes/header.php';
                  ============================================= -->
 
             <div class="project-actions">
+
+
+                <?php if ($purpose !== ''): ?>
+
+                    <button
+                        type="button"
+                        class="
+                            button
+                            secondary
+                            purpose-toggle
+                        "
+                        data-purpose-target="<?= e($purposeId) ?>"
+                    >
+                        제작 의도
+                    </button>
+
+                <?php endif; ?>
 
 
                 <!-- 자세히 보기 -->
@@ -1449,6 +1519,49 @@ require dirname(__DIR__) . '/includes/header.php';
 
 
 <script>
+
+/* =========================================================
+ * 제작 의도 펼치기 / 접기
+ * ========================================================= */
+
+document.addEventListener(
+    'click',
+    function (event) {
+
+        const button =
+            event.target.closest(
+                '.purpose-toggle'
+            );
+
+        if (!button) {
+            return;
+        }
+
+        const targetId =
+            button.dataset.purposeTarget;
+
+        if (!targetId) {
+            return;
+        }
+
+        const panel =
+            document.getElementById(
+                targetId
+            );
+
+        if (!panel) {
+            return;
+        }
+
+        panel.hidden = !panel.hidden;
+
+        button.textContent =
+            panel.hidden
+                ? '제작 의도'
+                : '제작 의도 닫기';
+    }
+);
+
 
 /* =========================================================
  * 자세히 보기
