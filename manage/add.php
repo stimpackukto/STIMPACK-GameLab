@@ -63,6 +63,14 @@ $formTitle = trim(
 );
 
 
+$formPurpose = trim(
+    (string)(
+        $_POST['purpose']
+        ?? ''
+    )
+);
+
+
 $formDescription = trim(
     (string)(
         $_POST['description']
@@ -390,6 +398,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 'title' =>
                     $formTitle,
+
+
+                'purpose' =>
+                    $formPurpose,
 
 
                 'description' =>
@@ -1019,6 +1031,28 @@ require dirname(__DIR__)
         value="<?= e($formTitle) ?>"
         required
     >
+
+
+    <?php if (!$isGame): ?>
+
+        <!-- ===============================================
+             제작 의도
+             =============================================== -->
+
+        <label for="project-purpose">
+
+            제작 의도
+
+        </label>
+
+
+        <textarea
+            id="project-purpose"
+            name="purpose"
+            placeholder="이 앱을 만들게 된 계기와 목적을 입력하세요"
+        ><?= e($formPurpose) ?></textarea>
+
+    <?php endif; ?>
 
 
     <!-- ===================================================
