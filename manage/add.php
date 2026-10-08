@@ -400,10 +400,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $formTitle,
 
 
-                'purpose' =>
-                    $formPurpose,
-
-
                 'description' =>
                     $formDescription,
 
@@ -493,6 +489,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 'title' =>
                     $formTitle,
+
+
+                'purpose' =>
+                    $formPurpose,
 
 
                 'description' =>
