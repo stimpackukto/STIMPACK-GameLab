@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+
+Disallow: /auth/
+Disallow: /app_view.php
+Disallow: /apps.php
+Disallow: /api/
+Disallow: /includes/
+Disallow: /wow/account/
+Disallow: /wow/auth/
+Disallow: /wow/api/
+Disallow: /wow/includes/
+Disallow: /wow/dev/
+Disallow: /wow/auction/
+Disallow: /wow/event/
+
+Sitemap: https://stimpack.pe.kr/sitemap.xml
+Sitemap: https://stimpack.pe.kr/wow/sitemap.xml
