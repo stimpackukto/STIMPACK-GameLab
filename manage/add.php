@@ -529,6 +529,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $formReleased,
 
 
+                'released_at' =>
+                    $formReleased
+                        ? date('c')
+                        : '',
+
+
                 /*
                  * Google Play URL
                  */
