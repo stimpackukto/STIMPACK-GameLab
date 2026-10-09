@@ -166,6 +166,14 @@ $formReleased =
     );
 
 
+$currentReleasedAt = trim(
+    (string)(
+        $current['released_at']
+        ?? ''
+    )
+);
+
+
 $currentImage =
     (string)(
         $current['image']
@@ -342,6 +350,15 @@ if (
 
                 'released' =>
                     $formReleased,
+
+                'released_at' =>
+                    $formReleased
+                        ? (
+                            $currentReleasedAt !== ''
+                                ? $currentReleasedAt
+                                : date('c')
+                        )
+                        : '',
 
                 'url' =>
                     $formUrl,
