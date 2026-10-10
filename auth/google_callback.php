@@ -637,6 +637,16 @@ $_SESSION['google_login_at'] =
 
 
 /* =========================================================
+ * Linked WoW web session (does not replace an existing different login)
+ * ========================================================= */
+try {
+    require_once __DIR__ . '/wow_session_bridge.php';
+    gamelab_wow_session_login();
+} catch (Throwable $e) {
+    error_log('gamelab_wow_sso: unable to issue WoW session');
+}
+
+/* =========================================================
  * 로그인 완료
  * ========================================================= */
 
