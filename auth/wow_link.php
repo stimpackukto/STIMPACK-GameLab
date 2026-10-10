@@ -36,6 +36,18 @@ function wow_link_page(string $message, string $tone = 'info', bool $confirm = f
     exit;
 }
 
+function wow_link_manage_page(string $email, string $name, string $token, bool $recent): void {
+    echo '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GAME LAB 계정 연결 관리</title></head><body style="margin:0;padding:30px;background:#061421;color:#e4f5ff;font-family:system-ui,sans-serif"><main style="max-width:540px;margin:30px auto;padding:24px;border-radius:14px;background:#0b2335;border:1px solid #24506b"><h2>GAME LAB 계정 연결 완료</h2>';
+    echo '<p>Google: <strong>'.wow_link_h($email).'</strong><br>WoW: <strong>'.wow_link_h($name).'</strong></p>';
+    if ($recent) {
+        echo '<form method="post" action="/auth/wow_link.php"><input type="hidden" name="csrf" value="'.wow_link_h($token).'"><button name="action" value="unlink" type="submit" style="padding:10px 16px;border:1px solid #ec8c92;background:#431d29;color:#fff;border-radius:8px;cursor:pointer">Google 계정 연결 해제</button></form>';
+    } else {
+        echo '<p>연결 해제하려면 WoW에서 다시 로그인한 뒤 15분 안에 이 페이지로 돌아와 주세요.</p>';
+    }
+    echo '<p><a style="color:#90d9fc" href="/wow/account/my">WoW 마이페이지</a></p></main></body></html>';
+    exit;
+}
+
 $account = $_SESSION['account'] ?? null;
 $google = $_SESSION['google_user'] ?? null;
 $wowId = is_array($account) ? (int)($account['id'] ?? 0) : 0;
@@ -51,17 +63,60 @@ if ($sub === '' || $email === '') {
     wow_link_page('GAME LAB 구글 로그인이 필요합니다. GAME LAB에서 구글 로그인을 완료한 후 WoW 마이페이지의 연동 버튼을 다시 눌러 주세요.', 'error');
 }
 // Linking requires recent proof of possession of the WoW account.
-if ($loginAt <= 0 || time() - $loginAt > 900 || $loginAt > time() + 60) {
-    wow_link_page('보안을 위해 WoW 계정에 다시 로그인한 뒤 15분 이내에 연동해 주세요.', 'error');
+// Existing link status can be viewed without requiring a recent password login.
+// Changes (link or unlink) require recent WoW login and CSRF verification.
+$recentWoWLogin = $loginAt > 0 && $loginAt <= time() + 60 && time() - $loginAt <= 900;
+try {
+    $stmt = gamelab_db()->prepare('SELECT google_sub, wow_account_id, google_email FROM gamelab_wow_google_links WHERE google_sub = ? OR wow_account_id = ?');
+    $stmt->execute([$sub, $wowId]);
+    $matches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log('wow_link: lookup error '.$e->getCode());
+    http_response_code(503);
+    wow_link_page('연동 상태를 조회하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+}
+$linked = false;
+foreach ($matches as $match) {
+    if ((string)$match['google_sub'] !== $sub || (int)$match['wow_account_id'] !== $wowId) {
+        http_response_code(409);
+        wow_link_page('현재 Google 또는 WoW 계정이 다른 계정에 연결되어 있습니다. 계정 소유권을 확인해 주세요.', 'error');
+    }
+    $linked = true;
+}
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && $linked) {
+    $_SESSION['wow_link_csrf'] = bin2hex(random_bytes(32));
+    wow_link_manage_page($email, $wowName, $_SESSION['wow_link_csrf'], $recentWoWLogin);
+}
+if (!$recentWoWLogin) {
+    wow_link_page('보안을 위해 WoW 계정에 다시 로그인한 뒤 15분 이내에 연동 또는 해제해 주세요.', 'error');
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $posted = (string)($_POST['csrf'] ?? '');
     $stored = (string)($_SESSION['wow_link_csrf'] ?? '');
     unset($_SESSION['wow_link_csrf']);
-    if ($posted === '' || $stored === '' || !hash_equals($stored, $posted) || ($_POST['action'] ?? '') !== 'link') {
+    if ($posted === '' || $stored === '' || !hash_equals($stored, $posted)) {
         http_response_code(403);
         wow_link_page('유효하지 않은 연동 요청입니다. 다시 시도해 주세요.', 'error');
+    }
+    if (($_POST['action'] ?? '') === 'unlink') {
+        if (!$linked) {
+            http_response_code(409);
+            wow_link_page('연결된 계정이 없습니다.', 'error');
+        }
+        try {
+            $stmt = gamelab_db()->prepare('DELETE FROM gamelab_wow_google_links WHERE google_sub = ? AND wow_account_id = ?');
+            $stmt->execute([$sub, $wowId]);
+            wow_link_page('Google 계정 연결이 해제됐습니다. WoW 계정은 그대로 유지됩니다.');
+        } catch (PDOException $e) {
+            error_log('wow_link: unlink error '.$e->getCode());
+            http_response_code(503);
+            wow_link_page('연결 해제에 실패했습니다.', 'error');
+        }
+    }
+    if (($_POST['action'] ?? '') !== 'link') {
+        http_response_code(403);
+        wow_link_page('허용되지 않은 요청입니다.', 'error');
     }
     try {
         $db = gamelab_db();
@@ -80,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $db->prepare('INSERT INTO gamelab_wow_google_links (google_sub, wow_account_id, google_email, created_at) VALUES (?, ?, ?, NOW())');
         $stmt->execute([$sub, $wowId, $email]);
         $db->commit();
-        wow_link_page('계정 연결이 완료됐습니다. 자동 로그인은 별도 검증 후 활성화됩니다.');
+        wow_link_page('계정 연결이 완료됐습니다. 다음 Google 로그인부터 WoW 웹 자동 로그인이 적용됩니다.');
     } catch (PDOException $e) {
         if (isset($db) && $db->inTransaction()) $db->rollBack();
         error_log('wow_link: database error '.$e->getCode());
