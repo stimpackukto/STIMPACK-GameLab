@@ -24,7 +24,7 @@ function gamelab_wow_session_login(): bool {
     if ($existing > 0 && $existing !== $id) return false;
     if ($existing === $id) return true;
 
-    // Reuse the operational WoW connection; do not duplicate credentials.
+    // Load WoW config before issuing a session. Existing session is active.
     $wowConfig = dirname(__DIR__) . '/wow/includes/config.php';
     if (!is_file($wowConfig)) { error_log('gamelab_wow_sso: WOW_CONFIG_MISSING'); return false; }
     require_once $wowConfig;
@@ -41,5 +41,6 @@ function gamelab_wow_session_login(): bool {
     if (!$row || (int)($row['locked'] ?? 0) !== 0) { error_log('gamelab_wow_sso: WOW_ACCOUNT_UNAVAILABLE'); return false; }
     session_regenerate_id(true);
     $_SESSION['account'] = ['id' => (int)$row['id'], 'username' => (string)$row['username'], 'login_at' => time(), 'login_source' => 'gamelab_google'];
+    error_log('gamelab_wow_sso: SESSION_ISSUED');
     return true;
 }
