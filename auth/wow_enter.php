@@ -3,9 +3,6 @@ declare(strict_types=1);
 
 // STIMPACK GAME LAB -> WoW: issue a one-use entrance ticket.
 // Uses the existing shared PHP session; no login or WoW account changes.
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
 $destinations = [
     'home' => '/wow/',
     'news' => '/wow/home/news',
@@ -16,8 +13,13 @@ if (!isset($destinations[$destination])) {
     $destination = 'home';
 }
 $ticket = bin2hex(random_bytes(24));
-$_SESSION['gamelab_wow_entry_ticket'] = $ticket;
-$_SESSION['gamelab_wow_entry_issued'] = time();
+setcookie('stimpack_wow_entry', $ticket, [
+    'expires' => time() + 120,
+    'path' => '/wow/enter.php',
+    'secure' => true,
+    'httponly' => true,
+    'samesite' => 'Lax',
+]);
 
 header('Cache-Control: no-store, private');
 header('Referrer-Policy: no-referrer');
