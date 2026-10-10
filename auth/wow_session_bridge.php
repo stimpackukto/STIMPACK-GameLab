@@ -28,8 +28,11 @@ function gamelab_wow_session_login(): bool {
     $wowConfig = dirname(__DIR__) . '/wow/includes/config.php';
     if (!is_file($wowConfig)) { error_log('gamelab_wow_sso: WOW_CONFIG_MISSING'); return false; }
     require_once $wowConfig;
-    if (!isset($conn) || !($conn instanceof mysqli)) { error_log('gamelab_wow_sso: WOW_DB_UNAVAILABLE'); return false; }
-    $stmt = $conn->prepare('SELECT id, username, locked FROM auth.account WHERE id = ? LIMIT 1');
+    // WoW config creates the mysqli connection in the global scope when loaded
+    // by index.php. A function-level require can also create a local $conn.
+    $wowConn = (isset($conn) && $conn instanceof mysqli) ? $conn : ($GLOBALS['conn'] ?? null);
+    if (!($wowConn instanceof mysqli)) { error_log('gamelab_wow_sso: WOW_DB_UNAVAILABLE'); return false; }
+    $stmt = $wowConn->prepare('SELECT id, username, locked FROM auth.account WHERE id = ? LIMIT 1');
     if (!$stmt) { error_log('gamelab_wow_sso: WOW_QUERY_UNAVAILABLE'); return false; }
     $stmt->bind_param('i', $id);
     $stmt->execute();
