@@ -650,7 +650,7 @@ require __DIR__ . '/includes/header.php';
 
                 <a
                     class="button primary wow-enter"
-                    href="/auth/wow_enter.php?to=home"
+                    href="<?= e(WOW_URL) ?>"
                 >
 
                     ▶ WOW 바로가기
@@ -660,7 +660,7 @@ require __DIR__ . '/includes/header.php';
 
                 <a
                     class="button secondary"
-                    href="/auth/wow_enter.php?to=register"
+                    href="/wow/auth/register"
                 >
 
                     계정 생성
@@ -670,7 +670,7 @@ require __DIR__ . '/includes/header.php';
 
                 <a
                     class="button secondary"
-                    href="/auth/wow_enter.php?to=news"
+                    href="/wow/home/news"
                 >
 
                     새소식
