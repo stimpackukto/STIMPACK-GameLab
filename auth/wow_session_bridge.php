@@ -15,15 +15,13 @@ function gamelab_wow_session_login(): bool {
     if (session_status() !== PHP_SESSION_ACTIVE) { error_log('gamelab_wow_sso: NO_SESSION'); return false; }
     $g = $_SESSION['google_user'] ?? null;
     if (!is_array($g) || trim((string)($g['sub'] ?? '')) === '') { error_log('gamelab_wow_sso: NO_GOOGLE_ID'); return false; }
+    // A completed Google OAuth sign-in establishes a new account context.
+    // Never carry a previous WoW login into a different Google account.
+    unset($_SESSION['account']);
     $link = gamelab_wow_link_for_google((string)$g['sub']);
     if (!$link) { error_log('gamelab_wow_sso: NO_LINK'); return false; }
     $id = (int)$link['wow_account_id'];
     if ($id < 1) return false;
-    // A pre-existing, different WoW login must never be overwritten.
-    $existing = (int)($_SESSION['account']['id'] ?? 0);
-    if ($existing > 0 && $existing !== $id) return false;
-    if ($existing === $id) return true;
-
     // Load WoW config before issuing a session. Existing session is active.
     $wowConfig = dirname(__DIR__) . '/wow/includes/config.php';
     if (!is_file($wowConfig)) { error_log('gamelab_wow_sso: WOW_CONFIG_MISSING'); return false; }
