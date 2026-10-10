@@ -13,7 +13,9 @@ session_start();
 
 $config = require '/etc/stimpack/google_oauth.php';
 
+$switchWowAccount = (($_GET['switch'] ?? '') === '1');
 $state = bin2hex(random_bytes(32));
+$_SESSION['google_oauth_switch_wow'] = $switchWowAccount;
 $_SESSION['google_oauth_state'] = $state;
 
 $params = [
