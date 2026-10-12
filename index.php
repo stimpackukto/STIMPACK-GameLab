@@ -418,6 +418,22 @@ require __DIR__ . '/includes/header.php';
 }
 
 
+/* WEB 버전 링크 뱃지 */
+.app-cards .app-status-row .web-status {
+    background: #7552d8 !important;
+    color: #fff !important;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.app-cards .app-status-row .web-status:hover,
+.app-cards .app-status-row .web-status:focus-visible {
+    background: #9468f5 !important;
+    outline: 2px solid rgba(255,255,255,.7);
+    outline-offset: 2px;
+}
+
+
 /* =========================================================
  * APP TITLE
  *
@@ -1178,6 +1194,9 @@ require __DIR__ . '/includes/header.php';
                     )
                 );
 
+                $appWebUrl = trim((string)($app['web_url'] ?? ''));
+                $hasAppWebUrl = $appWebUrl !== '' && catalog_valid_url($appWebUrl);
+
                 ?>
 
 
@@ -1236,6 +1255,16 @@ require __DIR__ . '/includes/header.php';
 
                             <?php endif; ?>
 
+                            <?php if ($hasAppWebUrl): ?>
+                                <a
+                                    class="mini-status web-status"
+                                    href="<?= e($appWebUrl) ?>"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label="<?= e((string)($app['title'] ?? '앱')) ?> 웹 버전 열기"
+                                    title="웹 버전 열기"
+                                >WEB</a>
+                            <?php endif; ?>
 
                         </div>
 
