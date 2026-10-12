@@ -29,6 +29,9 @@
         var element = event.target instanceof Element ? event.target : event.target.parentElement;
         var link = element && element.closest('a.web-status[href]');
         if (!link || isMobileDevice()) return;
+        // 다른 웹 게임/앱의 WEB 뱃지는 PC에서도 정상 이용할 수 있도록 유지합니다.
+        var destination = new URL(link.href, window.location.href);
+        if (destination.pathname.replace(/\/+$/, '') !== '/busanbus/web') return;
         event.preventDefault();
         window.alert('모바일에서만 지원합니다.');
     }, true);
