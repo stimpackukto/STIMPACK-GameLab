@@ -156,6 +156,16 @@ $formPlayUrl = trim(
 );
 
 
+/* APP 전용 웹 버전 주소: 저장된 값이 없으면 빈칸 */
+$formWebUrl = trim(
+    (string)(
+        $_POST['web_url']
+        ?? $current['web_url']
+        ?? ''
+    )
+);
+
+
 $formReleased =
     !$isGame
     &&
@@ -251,6 +261,17 @@ if (
 
             throw new RuntimeException(
                 'Google Play URL 형식이 올바르지 않습니다.'
+            );
+        }
+
+
+        if (
+            !$isGame
+            && $formWebUrl !== ''
+            && !catalog_valid_url($formWebUrl)
+        ) {
+            throw new RuntimeException(
+                '웹 버전 URL 형식이 올바르지 않습니다.'
             );
         }
 
@@ -362,6 +383,9 @@ if (
 
                 'url' =>
                     $formUrl,
+
+                'web_url' =>
+                    $formWebUrl,
 
                 'action' =>
                     '자세히 보기',
@@ -809,6 +833,26 @@ foreach (
         name="url"
         value="<?= e($formUrl) ?>"
     >
+
+
+    <label for="app-web-url">
+        웹 버전 URL (선택)
+    </label>
+
+    <input
+        id="app-web-url"
+        type="text"
+        name="web_url"
+        value="<?= e($formWebUrl) ?>"
+        placeholder="https://stimpack.pe.kr/busanbus/"
+        autocomplete="url"
+    >
+
+    <div class="edit-help">
+        입력된 웹 주소가 있을 때만 앱 카드에 WEB 배지가 표시됩니다.
+        사이트 내부 경로(/busanbus/)도 사용할 수 있습니다.
+        비워두고 저장하면 WEB 배지는 숨겨집니다.
+    </div>
 
 
 <?php endif; ?>
