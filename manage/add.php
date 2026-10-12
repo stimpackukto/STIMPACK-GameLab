@@ -127,6 +127,17 @@ $formPlayUrl = trim(
 
 
 /*
+ * APP 전용: 웹 버전 주소 (선택)
+ */
+$formWebUrl = trim(
+    (string)(
+        $_POST['web_url']
+        ?? ''
+    )
+);
+
+
+/*
  * 기존 이미지 직접 지정용
  */
 
@@ -267,6 +278,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             throw new RuntimeException(
                 '게임 Google Play URL 형식이 올바르지 않습니다.'
+            );
+        }
+
+
+        /* =================================================
+         * APP 웹 버전 URL (선택)
+         * ================================================= */
+
+        if (
+            !$isGame
+            && $formWebUrl !== ''
+            && !catalog_valid_url($formWebUrl)
+        ) {
+            throw new RuntimeException(
+                '웹 버전 URL 형식이 올바르지 않습니다.'
             );
         }
 
@@ -541,6 +567,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 'url' =>
                     $formUrl,
+
+
+                /* 웹에서 이용 가능한 앱인 경우 */
+                'web_url' =>
+                    $formWebUrl,
 
 
                 /*
@@ -1406,6 +1437,26 @@ require dirname(__DIR__)
 
                 로 저장됩니다.
 
+            </div>
+
+
+            <label for="app-web-url">
+                웹 버전 URL (선택)
+            </label>
+
+            <input
+                id="app-web-url"
+                type="text"
+                name="web_url"
+                value="<?= e($formWebUrl) ?>"
+                placeholder="https://stimpack.pe.kr/busanbus/"
+                autocomplete="url"
+            >
+
+            <div class="form-help">
+                웹 주소를 등록하면 앱 카드에 WEB 배지가 표시됩니다.
+                배지를 클릭하면 새 탭에서 웹 버전이 열립니다.
+                (사이트 내부 경로 /busanbus/ 도 사용 가능)
             </div>
 
 
