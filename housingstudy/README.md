@@ -1,6 +1,36 @@
 # HousingStudy 학습자 게시판 · 무료 서버 배포 안내
 
-Android HousingStudy v0.5.0의 다섯 번째 게시판 메뉴에서 https://stimpack.pe.kr/housingstudy/ 를 Custom Tabs로 엽니다.
+Android HousingStudy v0.6.0의 다섯 번째 게시판 메뉴는 Android 네이티브 BoardActivity를 엽니다. 웹 주소 https://stimpack.pe.kr/housingstudy/ 는 브라우저 이용자용으로 유지합니다.
+
+## v0.6.0 Android 네이티브 구글 로그인 및 API
+
+Android 앱에서는 게시판을 웹페이지로 열지 않습니다. `BoardActivity`가 게시글 목록/상세/글쓰기/댓글/신고/차단을 직접 표시하며, Android Credential Manager가 구글 계정 선택 UI를 제공합니다.
+
+- 엔드포인트: `https://stimpack.pe.kr/housingstudy/api.php`
+- 공개 조회: `GET ?action=list`, `GET ?action=post&id=1`
+- 구글 인증: `GET ?action=nonce` (기존 서버 웹 OAuth 클라이언트 ID + 일회성 nonce), `POST action=login` (Google ID token + nonce)
+- 서버 검증: Google tokeninfo TLS 검증 + 발급자/audience/만료/nonce 확인, nonce 1회 소비, 14일 앱 전용 세션 발급. Google ID 토큰 자체는 DB에 저장하지 않습니다.
+- 로그인 API: `POST action=session`, `POST action=logout`
+- 작성 API: `POST action=create/comment/delete/delete_comment/report/block`. 모든 작성 요청에는 앱 로그인 세션 토큰이 필요하며 공개 게시글 조회는 로그인 없이 가능합니다.
+- 기존의 웹 로그인/웹 게시판은 계속 지원합니다. 두 방식은 동일한 `housingstudy_posts`, `housingstudy_comments` DB 데이터를 공유합니다. 앱 로그인 세션과 웹 PHP 쿠키 로그인은 별개입니다.
+- 앱 로그인 비밀키는 Android Keystore에 암호화해 저장하고, 서버 DB에는 토큰의 SHA-256 해시만 저장합니다.
+
+### 앱 로그인 배포 필수 절차
+
+1. 기존 웹사이트 `/var/www/gamelab`에서 `git pull origin main`.
+2. **이전 v0.5 버전에서 4개 테이블을 생성했더라도 SQL 재적용 필수!** DB 추가 생성:
+
+    sudo mysql gamelab < /var/www/gamelab/housingstudy/schema.sql
+
+   기존 4개와 앱 로그인용 2개를 포함해 총 6개 테이블을 확인:
+
+    sudo mysql gamelab -e "SHOW TABLES LIKE 'housingstudy_%';"
+
+3. 기존 PHP-FPM이 `/etc/stimpack/google_oauth.php`를 읽을 수 있어야 합니다. 웹 OAuth의 웹 클라이언트 ID를 구글 인증 토큰 검증에 사용하며 **비밀번호/비밀키를 Android나 GitHub에 복사하지 않습니다.**
+4. Google Cloud Console의 **같은 프로젝트**에서 패키지 `pe.kr.forum.housingstudy`와 해당 APK 서명의 **SHA-1**로 Android 유형 OAuth 클라이언트를 등록합니다. 개발용 debug와 Google Play 앱 서명 SHA-1은 달라서 각각 설정해야 합니다.
+5. `curl -i https://stimpack.pe.kr/housingstudy/api.php?action=nonce` 응답에서 200 및 `ok:true`를 확인합니다. 웹 클라이언트 ID는 공개 식별값이지만 반환된 nonce는 잠시 후 만료됩니다.
+6. Android v0.6.0 설치 후 앱 내부 **게시판 → Google 계정 선택 → 글쓰기/댓글**을 실제 기기에서 점검합니다. PHP 문법 검사만으로 OAuth/네트워크 성공은 보장되지 않습니다.
+7. 기존 웹 저장소 외 추가 서버 가입/구독은 없습니다. 업로드 5MB 제한은 유지됩니다.
 
 ## 구조
 
