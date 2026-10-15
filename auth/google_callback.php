@@ -650,8 +650,12 @@ try {
  * 로그인 완료
  * ========================================================= */
 
-header(
-    'Location: /'
-);
+// Redirect only to an explicitly approved same-origin path.
+$afterLogin = (string) ($_SESSION['google_login_return'] ?? '/');
+unset($_SESSION['google_login_return']);
+if ($afterLogin !== '/housingstudy/') {
+    $afterLogin = '/';
+}
+header('Location: ' . $afterLogin);
 
 exit;
