@@ -105,6 +105,11 @@ try {
     $db = hs_db();
 
     if ($action === 'nonce' && $method === 'GET') {
+        // Opportunistic cleanup; tokens and one-time challenges are short-lived.
+        if (random_int(1, 20) === 1) {
+            $db->exec('DELETE FROM housingstudy_login_nonces WHERE expires_at < NOW()');
+            $db->exec('DELETE FROM housingstudy_app_sessions WHERE expires_at < NOW()');
+        }
         $config = require '/etc/stimpack/google_oauth.php';
         $client = trim((string)($config['client_id'] ?? ''));
         if (!preg_match('/^[a-zA-Z0-9_.-]+\.apps\.googleusercontent\.com$/D', $client)) api_fail(503, 'Google 인증 설정이 준비되지 않았어요.');
