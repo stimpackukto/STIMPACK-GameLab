@@ -1,6 +1,6 @@
 # HousingStudy 학습자 게시판 · 무료 서버 배포 안내
 
-Android HousingStudy v0.5.0의 다섯 번째 게시판 메뉴에서 https://forum.pe.kr/housingstudy/ 를 Custom Tabs로 엽니다.
+Android HousingStudy v0.5.0의 다섯 번째 게시판 메뉴에서 https://stimpack.pe.kr/housingstudy/ 를 Custom Tabs로 엽니다.
 
 ## 구조
 
@@ -30,7 +30,14 @@ Android HousingStudy v0.5.0의 다섯 번째 게시판 메뉴에서 https://foru
 
    PHP 실행 계정이 다르면 적절한 계정으로 바꾸세요. 웹 사용자에게 전역 777 권한을 주면 안 됩니다.
 
-5. https://forum.pe.kr/housingstudy/ 접속 → 게시글 읽기 → 구글 로그인 후 복귀 → 글/댓글/PDF 첨부 및 신고 테스트.
+5. https://stimpack.pe.kr/housingstudy/ 접속 → 게시글 읽기 → 구글 로그인 후 복귀 → 글/댓글/PDF 첨부 및 신고 테스트.
+
+## 운영 도메인 주의
+
+- **정식 주소는 https://stimpack.pe.kr/housingstudy/** 입니다. `forum.pe.kr`은 초기 개발용 주소였고 HousingStudy 앱에서는 더 이상 사용하지 않습니다.
+- `stimpack.pe.kr`의 Nginx 문서 루트 또는 `/housingstudy/` 경로가 실제 `/var/www/gamelab/housingstudy/`를 가리키는지 확인해야 합니다. 확인 전에는 기존 웹사이트 라우팅이나 도메인 설정을 함부로 덮어쓰지 마세요.
+- 기존 Google OAuth 클라이언트 `/etc/stimpack/google_oauth.php`의 `redirect_uri`가 어느 도메인인지 확인하세요. OAuth 콜백은 `stimpack.pe.kr` 호스트여야 로그인 세션 쿠키가 같은 도메인에서 유지됩니다. Google Cloud의 승인된 리디렉션 URI에도 정확히 등록되어야 합니다.
+- 웹 페이지와 API의 `/housingstudy/` 상대 경로는 유지하므로 호스트 변경 외에는 수정할 필요가 없습니다.
 
 ## 유의사항
 
