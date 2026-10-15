@@ -1,0 +1,26 @@
+name: HousingStudy board PHP checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'housingstudy/**'
+      - 'auth/google_login.php'
+      - 'auth/google_callback.php'
+      - '.github/workflows/housingstudy-lint.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP syntax checks
+        run: |
+          set -eu
+          for file in housingstudy/*.php auth/google_login.php auth/google_callback.php; do
+            php -l "$file"
+          done
