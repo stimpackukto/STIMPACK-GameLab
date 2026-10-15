@@ -49,3 +49,23 @@ CREATE TABLE IF NOT EXISTS housingstudy_blocks (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (blocker_hash, blocked_hash)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Android-native Credential Manager sign-in.
+-- Transient nonce allows server-side ID-token replay protection.
+CREATE TABLE IF NOT EXISTS housingstudy_login_nonces (
+    nonce_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+    expires_at DATETIME NOT NULL,
+    INDEX idx_expiration (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Authenticated Android sessions, independent of website cookie sessions.
+-- Raw bearer secrets and Google ID tokens are NEVER stored in DB.
+CREATE TABLE IF NOT EXISTS housingstudy_app_sessions (
+    token_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+    author_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    author_name VARCHAR(60) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_expiration (expires_at),
+    INDEX idx_author (author_hash)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
