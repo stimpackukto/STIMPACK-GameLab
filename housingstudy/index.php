@@ -255,5 +255,5 @@ footer{color:var(--muted);font-size:12px;margin-top:30px}hr{border:0;border-top:
 <?php if ($page*20 < $total): ?><a class="btn" href="?category=<?= rawurlencode($category) ?>&page=<?= $page+1 ?>">다음 〉</a><?php endif ?>
 </div>
 <?php endif ?>
-<footer>글·댓글은 구글 계정으로 로그인한 학습자만 작성할 수 있어요. 이메일 주소는 게시판에 공개되지 않으며, 신고된 콘텐츠는 관리자가 검토할 수 있습니다. 본 게시판은 Q-Net 공식 서비스가 아닙니다.</footer>
+<footer>글·댓글은 구글 계정으로 로그인한 학습자만 작성할 수 있어요. 이메일 주소는 게시판에 공개되지 않으며, 신고된 콘텐츠는 관리자가 검토할 수 있습니다. 본 게시판은 Q-Net 공식 서비스가 아닙니다. <a href="/housingstudy/policy.php" style="text-decoration:underline">이용규칙·개인정보 안내</a></footer>
 </main></body></html>
