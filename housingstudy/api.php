@@ -141,7 +141,7 @@ try {
         $page = min(500, max(1, (int)($_GET['page'] ?? 1)));
         $category = trim((string)($_GET['category'] ?? '전체'));
         if ($category !== '전체' && !in_array($category, hs_categories(), true)) api_fail(400,'분류가 올바르지 않아요.');
-        $sql = 'SELECT p.id,p.author_hash,p.author_name,p.category,p.title,p.created_at,
+        $sql = 'SELECT p.id,p.author_hash,p.author_name,p.category,p.title,p.created_at,LEFT(p.body,120) AS excerpt,
           (SELECT COUNT(*) FROM housingstudy_comments c WHERE c.post_id=p.id AND c.deleted_at IS NULL) AS comments
           FROM housingstudy_posts p WHERE p.deleted_at IS NULL';
         $params = [];
@@ -153,9 +153,23 @@ try {
         foreach ($stmt->fetchAll() as $p) {
             $rows[] = ['id'=>(int)$p['id'],'category'=>$p['category'],'title'=>$p['title'],
                        'author'=>$p['author_name'],'author_hash'=>$p['author_hash'],
-                       'date'=>$p['created_at'],'comments'=>(int)$p['comments']];
+                       'date'=>$p['created_at'],'excerpt'=>(string)$p['excerpt'],'comments'=>(int)$p['comments']];
         }
-        api_out(['ok'=>true,'posts'=>$rows,'page'=>$page]);
+        // Real server-local daily post totals for the pastel board shortcuts.
+        // Do not fabricate category counts from a 20-post preview.
+        $todayCounts = array_fill_keys(hs_categories(), 0);
+        $counts = $db->query("SELECT category,COUNT(*) AS total
+            FROM housingstudy_posts
+            WHERE deleted_at IS NULL AND created_at >= CURRENT_DATE()
+                AND created_at < CURRENT_DATE() + INTERVAL 1 DAY
+            GROUP BY category");
+        foreach ($counts->fetchAll() as $count) {
+            $key = (string)$count['category'];
+            if (array_key_exists($key, $todayCounts)) {
+                $todayCounts[$key] = (int)$count['total'];
+            }
+        }
+        api_out(['ok'=>true,'posts'=>$rows,'page'=>$page,'today_counts'=>$todayCounts]);
     }
     if ($action === 'post' && $method === 'GET') {
         $post = hs_post($db, (int)($_GET['id'] ?? 0));
