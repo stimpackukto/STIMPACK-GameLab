@@ -1045,13 +1045,7 @@ require __DIR__ . '/includes/header.php';
 
                             <a
                                 class="home-game-action"
-                                href="<?= e($gameUrl) ?>"
-                                <?= !empty(
-                                    $game['external']
-                                )
-                                    ? 'target="_blank" rel="noopener noreferrer"'
-                                    : ''
-                                ?>
+                                href="/games/<?= $gameSlug !== '' ? '#' . rawurlencode($gameSlug) : '' ?>"
                             >
 
                                 <?= e(
@@ -1105,9 +1099,7 @@ require __DIR__ . '/includes/header.php';
         <div class="home-game-badges"><span><?= e((string)($tool['platform'] ?? 'UTILITY')) ?></span><span class="status"><?= e((string)($tool['status'] ?? '개발중')) ?></span></div>
         <h3 class="home-game-title"><?= e((string)$tool['title']) ?></h3>
         <p class="home-game-description"><?= e((string)$tool['description']) ?></p>
-        <?php if (!empty($tool['url'])): ?>
-          <a class="home-game-action" href="<?= e((string)$tool['url']) ?>" <?= preg_match('~^https?://~i',(string)$tool['url']) ? 'target="_blank" rel="noopener noreferrer"' : '' ?>>도구 이용하기 →</a>
-        <?php endif; ?>
+        <a class="home-game-action" href="/tools/#<?= rawurlencode((string)$tool['id']) ?>">도구 이용하기 →</a>
       </div>
     </article>
   <?php endforeach; ?>
