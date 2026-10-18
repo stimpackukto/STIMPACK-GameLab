@@ -725,6 +725,11 @@ function catalog_upload_image_by_id(
             . $id
             . '.webp';
 
+    } elseif ($type === 'tool') {
+
+        $dir = dirname(__DIR__) . '/assets/images/tools';
+        $webPath = '/assets/images/tools/' . $id . '.webp';
+
     } else {
 
         imagedestroy($source);
