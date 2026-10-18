@@ -733,6 +733,8 @@ require __DIR__ . '/includes/header.php';
         </a>
 
 
+        <a href="/tools/"><span>🛠</span><b>도구</b><small>직접 만든 유틸리티</small></a>
+
         <a href="/apps/">
 
             <span>
@@ -1081,6 +1083,38 @@ require __DIR__ . '/includes/header.php';
 
 </section>
 
+
+<!-- TOOLS -->
+<section id="tools" class="section">
+<div class="container">
+  <div class="section-heading"><div>
+    <p class="section-kicker">STIMPACK UTILITIES</p>
+    <h2>도구</h2>
+    <p>직접 개발한 브라우저 확장 기능과 유틸리티를 소개합니다.</p>
+  </div><a href="/tools/">전체보기 →</a></div>
+  <?php if (empty($tools)): ?>
+    <p>새로운 도구를 준비 중입니다.</p>
+  <?php else: ?>
+  <div class="home-game-grid">
+  <?php foreach ($tools as $tool): ?>
+    <article class="home-game-card" id="tool-<?= e((string)$tool['id']) ?>">
+      <?php if (!empty($tool['image'])): ?>
+        <img class="home-game-image" loading="lazy" src="<?= e((string)$tool['image']) ?>" alt="<?= e((string)$tool['title']) ?>">
+      <?php endif; ?>
+      <div class="home-game-copy">
+        <div class="home-game-badges"><span><?= e((string)($tool['platform'] ?? 'UTILITY')) ?></span><span class="status"><?= e((string)($tool['status'] ?? '개발중')) ?></span></div>
+        <h3 class="home-game-title"><?= e((string)$tool['title']) ?></h3>
+        <p class="home-game-description"><?= e((string)$tool['description']) ?></p>
+        <?php if (!empty($tool['url'])): ?>
+          <a class="home-game-action" href="<?= e((string)$tool['url']) ?>" <?= preg_match('~^https?://~i',(string)$tool['url']) ? 'target="_blank" rel="noopener noreferrer"' : '' ?>>도구 이용하기 →</a>
+        <?php endif; ?>
+      </div>
+    </article>
+  <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+</div>
+</section>
 
 <!-- =========================================================
      GAME LAB APPS
