@@ -8,7 +8,8 @@ function catalog_file(string $type): string
     return match ($type) {
         'game' => $base . '/games.json',
         'app'  => $base . '/apps.json',
-        default => throw new RuntimeException('Àß¸øµÈ catalog type'),
+        'tool' => $base . '/tools.json',
+        default => throw new RuntimeException('ì˜ëª»ëœ catalog type'),
     };
 }
 
@@ -43,12 +44,12 @@ function catalog_add(string $type, array $item): void
     $fp = fopen($file, 'c+');
 
     if (!$fp) {
-        throw new RuntimeException('ÀúÀå ÆÄÀÏÀ» ¿­ ¼ö ¾ø½À´Ï´Ù.');
+        throw new RuntimeException('ì €ì¥ íŒŒì¼ì„ ì—´ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.');
     }
 
     try {
         if (!flock($fp, LOCK_EX)) {
-            throw new RuntimeException('ÆÄÀÏ Àá±İ ½ÇÆĞ');
+            throw new RuntimeException('íŒŒì¼ ì ê¸ˆ ì‹¤íŒ¨');
         }
 
         rewind($fp);
@@ -74,7 +75,7 @@ function catalog_add(string $type, array $item): void
         );
 
         if ($json === false) {
-            throw new RuntimeException('JSON »ı¼º ½ÇÆĞ');
+            throw new RuntimeException('JSON ìƒì„± ì‹¤íŒ¨');
         }
 
         ftruncate($fp, 0);
@@ -104,7 +105,7 @@ function catalog_image_name_from_url(string $type, string $url): string
             !preg_match('/^[a-zA-Z0-9._-]+$/', $packageId)
         ) {
             throw new RuntimeException(
-                'Play Store URL¿¡¼­ ¾Û ID¸¦ È®ÀÎÇÒ ¼ö ¾ø½À´Ï´Ù.'
+                'Play Store URLì—ì„œ ì•± IDë¥¼ í™•ì¸í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤.'
             );
         }
 
@@ -135,7 +136,7 @@ function catalog_image_name_from_url(string $type, string $url): string
             strtolower($parts[0]) !== 'games'
         ) {
             throw new RuntimeException(
-                '°ÔÀÓ URLÀº /games/Æú´õ¸í/ ÇüÅÂ·Î ÀÔ·ÂÇØÁÖ¼¼¿ä.'
+                'ê²Œì„ URLì€ /games/í´ë”ëª…/ í˜•íƒœë¡œ ì…ë ¥í•´ì£¼ì„¸ìš”.'
             );
         }
 
@@ -146,7 +147,7 @@ function catalog_image_name_from_url(string $type, string $url): string
             !preg_match('/^[a-zA-Z0-9_-]+$/', $folder)
         ) {
             throw new RuntimeException(
-                '°ÔÀÓ Æú´õ¸íÀ» È®ÀÎÇÒ ¼ö ¾ø½À´Ï´Ù.'
+                'ê²Œì„ í´ë”ëª…ì„ í™•ì¸í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤.'
             );
         }
 
@@ -154,7 +155,7 @@ function catalog_image_name_from_url(string $type, string $url): string
     }
 
 
-    throw new RuntimeException('Àß¸øµÈ ÀÌ¹ÌÁö Á¾·ùÀÔ´Ï´Ù.');
+    throw new RuntimeException('ì˜ëª»ëœ ì´ë¯¸ì§€ ì¢…ë¥˜ì…ë‹ˆë‹¤.');
 }
 
 
@@ -175,7 +176,7 @@ function catalog_upload_image(
 
     if (!function_exists('imagewebp')) {
         throw new RuntimeException(
-            '¼­¹ö¿¡¼­ WebP º¯È¯ ±â´ÉÀ» »ç¿ëÇÒ ¼ö ¾ø½À´Ï´Ù.'
+            'ì„œë²„ì—ì„œ WebP ë³€í™˜ ê¸°ëŠ¥ì„ ì‚¬ìš©í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤.'
         );
     }
 
@@ -184,13 +185,13 @@ function catalog_upload_image(
 
 
     if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
-        throw new RuntimeException('ÀÌ¹ÌÁö ¾÷·Îµå¿¡ ½ÇÆĞÇß½À´Ï´Ù.');
+        throw new RuntimeException('ì´ë¯¸ì§€ ì—…ë¡œë“œì— ì‹¤íŒ¨í–ˆìŠµë‹ˆë‹¤.');
     }
 
 
     if (($file['size'] ?? 0) > 10 * 1024 * 1024) {
         throw new RuntimeException(
-            'ÀÌ¹ÌÁö´Â 10MB ÀÌÇÏ¸¸ °¡´ÉÇÕ´Ï´Ù.'
+            'ì´ë¯¸ì§€ëŠ” 10MB ì´í•˜ë§Œ ê°€ëŠ¥í•©ë‹ˆë‹¤.'
         );
     }
 
@@ -199,14 +200,14 @@ function catalog_upload_image(
 
 
     /*
-     * ½ÇÁ¦ ÀÌ¹ÌÁöÀÎÁö È®ÀÎ
+     * ì‹¤ì œ ì´ë¯¸ì§€ì¸ì§€ í™•ì¸
      */
 
     $info = @getimagesize($tmp);
 
     if ($info === false) {
         throw new RuntimeException(
-            'Á¤»óÀûÀÎ ÀÌ¹ÌÁö ÆÄÀÏÀÌ ¾Æ´Õ´Ï´Ù.'
+            'ì •ìƒì ì¸ ì´ë¯¸ì§€ íŒŒì¼ì´ ì•„ë‹™ë‹ˆë‹¤.'
         );
     }
 
@@ -220,13 +221,13 @@ function catalog_upload_image(
 
     if (!in_array($info[2], $allowed, true)) {
         throw new RuntimeException(
-            'JPG, PNG, WEBP ÀÌ¹ÌÁö¸¸ °¡´ÉÇÕ´Ï´Ù.'
+            'JPG, PNG, WEBP ì´ë¯¸ì§€ë§Œ ê°€ëŠ¥í•©ë‹ˆë‹¤.'
         );
     }
 
 
     /*
-     * URLÀ» ±âÁØÀ¸·Î ÆÄÀÏ¸í °áÁ¤
+     * URLì„ ê¸°ì¤€ìœ¼ë¡œ íŒŒì¼ëª… ê²°ì •
      */
 
     $baseName = catalog_image_name_from_url(
@@ -261,21 +262,21 @@ function catalog_upload_image(
 
         if (!mkdir($dir, 0775, true)) {
             throw new RuntimeException(
-                'ÀÌ¹ÌÁö ÀúÀå Æú´õ¸¦ ¸¸µé ¼ö ¾ø½À´Ï´Ù.'
+                'ì´ë¯¸ì§€ ì €ì¥ í´ë”ë¥¼ ë§Œë“¤ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.'
             );
         }
     }
 
 
     /*
-     * ¿øº» ÀÌ¹ÌÁö ÀĞ±â
+     * ì›ë³¸ ì´ë¯¸ì§€ ì½ê¸°
      */
 
     $raw = file_get_contents($tmp);
 
     if ($raw === false) {
         throw new RuntimeException(
-            'ÀÌ¹ÌÁö¸¦ ÀĞÀ» ¼ö ¾ø½À´Ï´Ù.'
+            'ì´ë¯¸ì§€ë¥¼ ì½ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.'
         );
     }
 
@@ -284,7 +285,7 @@ function catalog_upload_image(
 
     if ($source === false) {
         throw new RuntimeException(
-            'ÀÌ¹ÌÁö º¯È¯¿¡ ½ÇÆĞÇß½À´Ï´Ù.'
+            'ì´ë¯¸ì§€ ë³€í™˜ì— ì‹¤íŒ¨í–ˆìŠµë‹ˆë‹¤.'
         );
     }
 
@@ -294,9 +295,9 @@ function catalog_upload_image(
 
 
     /*
-     * ÃÖÁ¾ ±Ô°İ
+     * ìµœì¢… ê·œê²©
      *
-     * 1280 ¡¿ 720
+     * 1280 Ã— 720
      * 16:9
      */
 
@@ -308,12 +309,12 @@ function catalog_upload_image(
 
 
     /*
-     * Áß¾Ó ±âÁØ cover crop
+     * ì¤‘ì•™ ê¸°ì¤€ cover crop
      */
 
     if ($sourceRatio > $targetRatio) {
 
-        // ¿øº»ÀÌ °¡·Î·Î ³Ê¹« ³ĞÀ½
+        // ì›ë³¸ì´ ê°€ë¡œë¡œ ë„ˆë¬´ ë„“ìŒ
 
         $cropH = $srcH;
         $cropW = (int)round(
@@ -325,7 +326,7 @@ function catalog_upload_image(
 
     } else {
 
-        // ¿øº»ÀÌ ¼¼·Î·Î ³Ê¹« ³ôÀ½
+        // ì›ë³¸ì´ ì„¸ë¡œë¡œ ë„ˆë¬´ ë†’ìŒ
 
         $cropW = $srcW;
         $cropH = (int)round(
@@ -348,13 +349,13 @@ function catalog_upload_image(
         imagedestroy($source);
 
         throw new RuntimeException(
-            'ÀÌ¹ÌÁö »ı¼º¿¡ ½ÇÆĞÇß½À´Ï´Ù.'
+            'ì´ë¯¸ì§€ ìƒì„±ì— ì‹¤íŒ¨í–ˆìŠµë‹ˆë‹¤.'
         );
     }
 
 
     /*
-     * 1280 ¡¿ 720 º¯È¯
+     * 1280 Ã— 720 ë³€í™˜
      */
 
     imagecopyresampled(
@@ -379,7 +380,7 @@ function catalog_upload_image(
 
 
     /*
-     * WebP Ç°Áú 88
+     * WebP í’ˆì§ˆ 88
      */
 
     if (!imagewebp(
@@ -392,7 +393,7 @@ function catalog_upload_image(
         imagedestroy($dest);
 
         throw new RuntimeException(
-            'WebP ÀÌ¹ÌÁö ÀúÀå¿¡ ½ÇÆĞÇß½À´Ï´Ù.'
+            'WebP ì´ë¯¸ì§€ ì €ì¥ì— ì‹¤íŒ¨í–ˆìŠµë‹ˆë‹¤.'
         );
     }
 
@@ -424,7 +425,7 @@ function catalog_valid_url(string $url): bool
 }
 
 /* =========================================================
- * ±âÁ¸ Ç×¸ñ ¼öÁ¤
+ * ê¸°ì¡´ í•­ëª© ìˆ˜ì •
  * ========================================================= */
 
 function catalog_update(
@@ -436,19 +437,19 @@ function catalog_update(
     $file = catalog_file($type);
 
     if (!is_file($file)) {
-        throw new RuntimeException('µî·Ï µ¥ÀÌÅÍ¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù.');
+        throw new RuntimeException('ë“±ë¡ ë°ì´í„°ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.');
     }
 
     $fp = fopen($file, 'c+');
 
     if (!$fp) {
-        throw new RuntimeException('ÀúÀå ÆÄÀÏÀ» ¿­ ¼ö ¾ø½À´Ï´Ù.');
+        throw new RuntimeException('ì €ì¥ íŒŒì¼ì„ ì—´ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.');
     }
 
     try {
 
         if (!flock($fp, LOCK_EX)) {
-            throw new RuntimeException('ÆÄÀÏ Àá±İ ½ÇÆĞ');
+            throw new RuntimeException('íŒŒì¼ ì ê¸ˆ ì‹¤íŒ¨');
         }
 
         rewind($fp);
@@ -487,7 +488,7 @@ function catalog_update(
 
         if (!$found) {
             throw new RuntimeException(
-                '¼öÁ¤ÇÒ Ç×¸ñÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù.'
+                'ìˆ˜ì •í•  í•­ëª©ì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.'
             );
         }
 
@@ -501,7 +502,7 @@ function catalog_update(
 
 
         if ($json === false) {
-            throw new RuntimeException('JSON »ı¼º ½ÇÆĞ');
+            throw new RuntimeException('JSON ìƒì„± ì‹¤íŒ¨');
         }
 
 
@@ -523,10 +524,10 @@ function catalog_update(
 
 
 /* =========================================================
- * ±âÁ¸ ID ±âÁØ ´ëÇ¥ÀÌ¹ÌÁö ±³Ã¼
+ * ê¸°ì¡´ ID ê¸°ì¤€ ëŒ€í‘œì´ë¯¸ì§€ êµì²´
  *
- * ¼öÁ¤ÇÒ ¶§ URLÀÌ ¹Ù²î´õ¶óµµ
- * ID ¹× ¸®ºä ¿¬°áÀº À¯Áö
+ * ìˆ˜ì •í•  ë•Œ URLì´ ë°”ë€Œë”ë¼ë„
+ * ID ë° ë¦¬ë·° ì—°ê²°ì€ ìœ ì§€
  * ========================================================= */
 
 function catalog_upload_image_by_id(
@@ -547,7 +548,7 @@ function catalog_upload_image_by_id(
     if (!function_exists('imagewebp')) {
 
         throw new RuntimeException(
-            '¼­¹ö¿¡¼­ WebP º¯È¯ ±â´ÉÀ» »ç¿ëÇÒ ¼ö ¾ø½À´Ï´Ù.'
+            'ì„œë²„ì—ì„œ WebP ë³€í™˜ ê¸°ëŠ¥ì„ ì‚¬ìš©í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤.'
         );
     }
 
@@ -560,7 +561,7 @@ function catalog_upload_image_by_id(
     ) {
 
         throw new RuntimeException(
-            'Àß¸øµÈ ÄÜÅÙÃ÷ IDÀÔ´Ï´Ù.'
+            'ì˜ëª»ëœ ì½˜í…ì¸  IDì…ë‹ˆë‹¤.'
         );
     }
 
@@ -574,7 +575,7 @@ function catalog_upload_image_by_id(
     ) {
 
         throw new RuntimeException(
-            'ÀÌ¹ÌÁö ¾÷·Îµå¿¡ ½ÇÆĞÇß½À´Ï´Ù.'
+            'ì´ë¯¸ì§€ ì—…ë¡œë“œì— ì‹¤íŒ¨í–ˆìŠµë‹ˆë‹¤.'
         );
     }
 
@@ -585,7 +586,7 @@ function catalog_upload_image_by_id(
     ) {
 
         throw new RuntimeException(
-            'ÀÌ¹ÌÁö´Â 10MB ÀÌÇÏ¸¸ °¡´ÉÇÕ´Ï´Ù.'
+            'ì´ë¯¸ì§€ëŠ” 10MB ì´í•˜ë§Œ ê°€ëŠ¥í•©ë‹ˆë‹¤.'
         );
     }
 
@@ -598,7 +599,7 @@ function catalog_upload_image_by_id(
     if ($info === false) {
 
         throw new RuntimeException(
-            'Á¤»óÀûÀÎ ÀÌ¹ÌÁö ÆÄÀÏÀÌ ¾Æ´Õ´Ï´Ù.'
+            'ì •ìƒì ì¸ ì´ë¯¸ì§€ íŒŒì¼ì´ ì•„ë‹™ë‹ˆë‹¤.'
         );
     }
 
@@ -616,7 +617,7 @@ function catalog_upload_image_by_id(
     ) {
 
         throw new RuntimeException(
-            'JPG, PNG, WEBP ÀÌ¹ÌÁö¸¸ °¡´ÉÇÕ´Ï´Ù.'
+            'JPG, PNG, WEBP ì´ë¯¸ì§€ë§Œ ê°€ëŠ¥í•©ë‹ˆë‹¤.'
         );
     }
 
@@ -626,7 +627,7 @@ function catalog_upload_image_by_id(
     if ($raw === false) {
 
         throw new RuntimeException(
-            'ÀÌ¹ÌÁö¸¦ ÀĞÀ» ¼ö ¾ø½À´Ï´Ù.'
+            'ì´ë¯¸ì§€ë¥¼ ì½ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.'
         );
     }
 
@@ -636,7 +637,7 @@ function catalog_upload_image_by_id(
     if ($source === false) {
 
         throw new RuntimeException(
-            'ÀÌ¹ÌÁö º¯È¯¿¡ ½ÇÆĞÇß½À´Ï´Ù.'
+            'ì´ë¯¸ì§€ ë³€í™˜ì— ì‹¤íŒ¨í–ˆìŠµë‹ˆë‹¤.'
         );
     }
 
@@ -730,7 +731,7 @@ function catalog_upload_image_by_id(
         imagedestroy($dest);
 
         throw new RuntimeException(
-            'Àß¸øµÈ Á¾·ùÀÔ´Ï´Ù.'
+            'ì˜ëª»ëœ ì¢…ë¥˜ì…ë‹ˆë‹¤.'
         );
     }
 
@@ -764,7 +765,7 @@ function catalog_upload_image_by_id(
         imagedestroy($dest);
 
         throw new RuntimeException(
-            'WebP ÀúÀå¿¡ ½ÇÆĞÇß½À´Ï´Ù.'
+            'WebP ì €ì¥ì— ì‹¤íŒ¨í–ˆìŠµë‹ˆë‹¤.'
         );
     }
 
