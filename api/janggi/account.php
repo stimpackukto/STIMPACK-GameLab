@@ -23,16 +23,15 @@ if (!is_array($user) || !is_string($user['sub'] ?? null) || trim($user['sub']) =
     echo json_encode(['ok'=>true,'authenticated'=>false,'user'=>null], JSON_UNESCAPED_UNICODE);
     exit;
 }
-// Stable pseudonymous ID used for storing ONLY opted-in records. Must be configured
-// privately in PHP-FPM / server environment; do not put this secret in GitHub.
-$secret=(string)(getenv('STIMPACK_JANGGI_ACCOUNT_HMAC_SECRET') ?: '');
-if (strlen($secret)<32) {
+// Server-side pseudonymous ID. No user profile table or secret in web root.
+require_once dirname(__DIR__, 2) . '/includes/janggi_account_key.php';
+$accountId=janggi_pseudonymous_account_id((string)$user['sub']);
+if ($accountId===null) {
     http_response_code(503);
     echo json_encode(['ok'=>false,'authenticated'=>false,
-       'message'=>'장기 계정 연결이 아직 서버에 설정되지 않았습니다.'], JSON_UNESCAPED_UNICODE);
+       'message'=>'장기 서버 비밀키 설정이 필요합니다. 관리자에게 문의해 주세요.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
-$accountId=hash_hmac('sha256',trim($user['sub']),$secret);
 echo json_encode(['ok'=>true,'authenticated'=>true,
     'user'=>[
         'id'=>$accountId,
