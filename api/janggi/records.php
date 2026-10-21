@@ -41,9 +41,9 @@ $user=$_SESSION['google_user']??null;
 if (!is_array($user)||!is_string($user['sub']??null)||trim($user['sub'])==='') {
     out(401,['ok'=>false,'message'=>'GAME LAB Google 로그인이 필요합니다.']);
 }
-$secret=(string)(getenv('STIMPACK_JANGGI_ACCOUNT_HMAC_SECRET')?:'');
-if (strlen($secret)<32)out(503,['ok'=>false,'message'=>'장기 계정 서버 설정이 필요합니다.']);
-$key=hash_hmac('sha256',trim($user['sub']),$secret);
+require_once dirname(__DIR__, 2) . '/includes/janggi_account_key.php';
+$key=janggi_pseudonymous_account_id((string)$user['sub']);
+if ($key===null)out(503,['ok'=>false,'message'=>'장기 계정 서버 설정이 필요합니다.']);
 
 // No extra data about the user is persisted. Only a pseudonymous account key
 // attached to a consented record, so the account can delete its own records.
