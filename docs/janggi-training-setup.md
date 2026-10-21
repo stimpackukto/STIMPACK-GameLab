@@ -1,3 +1,17 @@
+# 게스트 기보 수동 전송 배포 (2026-10-22)
+
+- 게스트는 **계정 연결 없이 대국**하고, 누적 전적과 AI/시간 설정을 기기에 저장하지 않습니다.
+- 완료된 기보는 게스트가 **기보 전송** 버튼을 직접 누를 때만 `POST /api/janggi/guest_records.php`에 제출됩니다. 수신 성공 후에만 **다음 대국**이 활성화됩니다.
+- 익명 기보는 기존 `gamelab_janggi_training_records` 테이블에 `account_key=0000...0000`(64자리)을 사용하여 저장됩니다. 별도 게스트 프로필·세션·Google 계정 정보·동의 DB는 생성하지 않습니다.
+- 서버 측에서는 수순 좌표·차례·데이터 크기·시간 방식·엔진 종류 등을 확인하지만 장기 규칙 전체를 재연산하지 않습니다. AI 학습 전 별도 검증과 악성 데이터 필터링이 필요합니다.
+- **배포 파일:** GAME LAB 저장소 `api/janggi/guest_records.php`를 운영 서버 `/var/www/gamelab/api/janggi/guest_records.php`로 업로드합니다. PHP 문법 검사는 `php -l /var/www/gamelab/api/janggi/guest_records.php`로 확인합니다.
+- 신규 테이블은 필요하지 않지만 기존 `gamelab_janggi_training_records`가 있어야 합니다. 서버가 503을 반환하면 이 테이블과 `includes/db.php` DB 연결을 점검하세요.
+- 개인정보 안내 `janggi_privacy.html`도 최신으로 배포해야 합니다.
+- 서버가 성공 응답을 주지 않으면 게스트에게 다음 대국이 열리지 않습니다. 운영 환경을 검증한 뒤 공개하세요.
+- 비공개 GitHub 저장소는 인증 없는 `raw.githubusercontent.com` 요청이 404일 수 있으므로 **인증된 git pull 또는 FileZilla 업로드**로 배포하세요.
+
+---
+
 # STIMPACK 장기 — 계정 연결 및 AI 기보 수집 서버 설치
 
 ## 핵심 설계
