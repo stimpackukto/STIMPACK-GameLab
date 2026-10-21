@@ -19,19 +19,39 @@ mysql -u <DB_USER> -p <DB_NAME> < sql/20261022_janggi_training_records.sql
 
 기본 SQL 파일은 서버 데이터베이스 계정명이나 비밀번호를 포함하지 않습니다. DB 연결 정보는 기존 `includes/db.php`의 GAME LAB 설정을 이용합니다.
 
-## 2. 서버 비밀키 (필수)
+## 2. 서버 비밀키 (계정 연결에도 필수)
 
-최소 32바이트 이상 무작위 비밀키가 **PHP-FPM 환경변수** `STIMPACK_JANGGI_ACCOUNT_HMAC_SECRET`에 제공되어야 합니다. 파일을 GitHub에 올리면 안 됩니다.
+계정 확인 API는 로그인한 사용자의 Google `sub`를 **서버 전용 HMAC-SHA256 비밀키**로 가명화합니다. 운영 서버에 이 키가 없으면 계정 관리에서 **503**이 발생합니다.
 
-예시 생성 명령:
+PHP-FPM 환경변수 `STIMPACK_JANGGI_ACCOUNT_HMAC_SECRET` 또는 서버 전용 비밀 파일 `/etc/stimpack/janggi_account_hmac.key` 중 한 곳에서 읽습니다. 두 API 모두 `includes/janggi_account_key.php`를 사용합니다. PHP-FPM 환경변수가 있는 경우 그 값이 우선합니다. 비밀키는 GitHub나 웹 루트에 절대 두지 마세요.
+
+### 가장 간단한 서버 전용 파일 방식
+
+서버에서 아래 명령을 실행합니다(기존 키가 있으면 덮어쓰지 않음).
 
 ```bash
-openssl rand -hex 32
+sudo test -d /etc/stimpack || echo '/etc/stimpack 디렉터리를 먼저 확인하세요'
+sudo sh -c 'umask 077; test -s /etc/stimpack/janggi_account_hmac.key || openssl rand -hex 32 > /etc/stimpack/janggi_account_hmac.key'
+sudo chown root:www-data /etc/stimpack/janggi_account_hmac.key
+sudo chmod 640 /etc/stimpack/janggi_account_hmac.key
+sudo ls -l /etc/stimpack/janggi_account_hmac.key
 ```
 
-PHP-FPM은 기본값에서 환경변수를 자식 프로세스로 전달하지 않을 수 있습니다. 사용하는 풀 설정에 `env[STIMPACK_JANGGI_ACCOUNT_HMAC_SECRET]`를 안전하게 제공한 후 PHP-FPM을 재시작해야 합니다. 값을 공개 웹 폴더나 GitHub에 넣지 마세요. 이 키를 변경하면 이전에 수집한 기보의 계정 연결이 끊어지므로 백업·회전 계획이 필요합니다.
+출력에는 키 **내용을 표시하지 마세요.** `www-data`가 PHP-FPM 실행 그룹이 아닌 경우 해당 그룹으로 변경해야 합니다. 상위 `/etc/stimpack` 디렉터리도 PHP-FPM 프로세스가 탐색할 수 있어야 합니다. 로그인 계정에 연결된 기존 기보가 있다면 **키를 절대 교체하지 마세요**.
 
-키가 없으면 계정 API가 503을 반환하고 **기보 전송은 차단됩니다**.
+다음 PHP 소스를 운영 서버에도 반영해야 합니다.
+
+- `includes/janggi_account_key.php` 신규
+- `api/janggi/account.php` 업데이트
+- `api/janggi/records.php` 업데이트
+
+PHP 코드만 변경한 경우 Nginx 재시작은 불필요합니다. PHP OPcache에서 파일 타임스탬프 검사가 꺼져 있다면 PHP-FPM 재시작이 필요할 수 있습니다.
+
+### 환경변수 방식(대안)
+
+`STIMPACK_JANGGI_ACCOUNT_HMAC_SECRET`을 PHP-FPM 풀 환경변수로 제공해도 됩니다. 이 방식은 FPM 풀 설정 변경 및 재시작이 필요할 수 있습니다. 운영 방식은 하나로 통일하고, 두 경로의 키가 다르지 않도록 주의하세요.
+
+**중요:** 계정 연결 자체에는 SQL 테이블 생성이 필요하지 않습니다. 기보 서버 저장을 활성화할 때 1단계의 DB 마이그레이션과 별도 수집/보존 테스트가 필요합니다.
 
 ## 3. 동일 출처 웹 배포 (필수)
 
