@@ -1,3 +1,62 @@
+# 장기 전용 Google 로그인 배포 (2026-10-22)
+
+**기존 `/auth/google_login.php` 및 `$_SESSION['google_user']`는 장기에서 더 이상 사용하지 않습니다.** 인증 페이지는 `/api/janggi/google-start.php`로 분리되어 있으며 별도의 `STIMPACK_JANGGI_AUTH` PHP 세션을 사용합니다.
+
+## 사용자가 경험하는 흐름
+
+장기 계정 관리에서 **AI 학습용 기보 전송 동의** 체크 → **Google 계정으로 연결** 한 번 누르기 → Google 계정 선택 → 게임으로 자동 복귀. 복귀 후 별도 연결 확인 버튼이 없습니다. 기존 브라우저의 GAME LAB 로그인과 무관하게 동작합니다.
+
+## 배포할 파일
+
+```text
+/includes/janggi_google_auth.php        신규 · Google JWT 검증 / 독립 세션
+/api/janggi/google-start.php           신규 · 직접 Google 계정 선택 화면
+/api/janggi/google-config.php          신규 · 추후 버튼 통합용 설정
+/api/janggi/google-login.php           신규 · Google 토큰 인증
+/api/janggi/google-logout.php          신규 · 장기 계정만 로그아웃
+/api/janggi/account.php                변경 · 전용 세션만 확인
+/api/janggi/records.php                변경 · 전용 세션으로 기보 제출
+/janggi_privacy.html                   변경 · 개인정보 설명
+```
+
+GitHub에 반영해도 **서버가 자동 배포되지 않으므로** `/var/www/gamelab`에서 인증된 `git pull --ff-only origin main`으로 반영하세요. 로컬 수정 충돌이 있으면 먼저 별도로 백업하고 GitHub와 비교해야 합니다. 기존 HMAC 비밀키 `/etc/stimpack/janggi_account_hmac.key`는 절대 변경하지 마세요.
+
+## Google Cloud 설정
+
+1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials)에서 **OAuth 2.0 클라이언트 ID - 웹 애플리케이션**을 준비하세요. 장기 전용 새 클라이언트를 권장합니다. 원한다면 기존 `/etc/stimpack/google_oauth.php`의 웹 클라이언트 **ID만** 재사용할 수 있지만, 인증 세션과 로직은 분리됩니다. 클라이언트 **보안 비밀번호(client secret)는 절대 공개하거나 JavaScript에 넣지 마세요.**
+2. **승인된 JavaScript 원본**에 정확히 `https://stimpack.pe.kr`을 추가하세요. Google Identity Services의 버튼/콜백 방식이므로 별도의 redirect URI를 장기 페이지에 추가할 필요는 없습니다.
+3. 전용 ID를 사용하는 경우 운영 서버에 다음처럼 한 줄로 저장합니다(`XXXX...apps.googleusercontent.com`을 실제 ID로 교체).
+
+```bash
+sudo install -d -m 755 /etc/stimpack
+printf '%s\\n' 'XXXX.apps.googleusercontent.com' | sudo tee /etc/stimpack/janggi_google_client_id >/dev/null
+sudo chown root:www-data /etc/stimpack/janggi_google_client_id
+sudo chmod 640 /etc/stimpack/janggi_google_client_id
+```
+
+환경변수 `JANGGI_GOOGLE_CLIENT_ID`가 있으면 우선합니다. 그 다음 전용 ID 파일을, 둘 다 없을 때 기존 Google OAuth 설정 파일에서 **공개 클라이언트 ID만** 읽습니다. 정확한 Google 승인 원본 등록 없이는 인증이 거부될 수 있습니다.
+
+## PHP 사전 점검
+
+```bash
+cd /var/www/gamelab
+php -l includes/janggi_google_auth.php
+php -l api/janggi/google-start.php
+php -l api/janggi/google-config.php
+php -l api/janggi/google-login.php
+php -l api/janggi/google-logout.php
+php -l api/janggi/account.php
+php -l api/janggi/records.php
+```
+
+로그인 전/후 공식 웹사이트에서 `https://stimpack.pe.kr/api/janggi/google-start.php` 접속을 확인하세요. 장기 Google 화면은 Fairy-Stockfish의 COOP/COEP가 적용되지 않는 PHP URL에 둡니다. 장기 게임 페이지 `/games/janggi/`의 교차 출처 격리 설정은 그대로 유지하세요.
+
+Google 공개 인증서 조회(`www.googleapis.com:443`)가 서버에서 허용되어야 하며 PHP OpenSSL 확장이 필요합니다. PHP cURL 확장이 있으면 cURL을, 없으면 HTTPS stream wrapper를 사용합니다. 인증서 검증 실패나 일시적인 Google 네트워크 오류는 **로그인을 실패 처리**하며 비검증 사용자로 로그인시키지 않습니다.
+
+Google ID 토큰의 원본은 DB나 브라우저 저장소에 저장하지 않습니다. PHP 세션에는 Google 계정 식별자(원본 `sub`)와 동의 버전만 들어가며, 기보 DB에는 기존 HMAC 가명 계정 ID만 기록됩니다. Android TWA 앱에서도 동일한 Google 로그인 화면을 사용하므로 실기기 Chrome에서 Google 버튼 표시, 자동 복귀, 전적 및 기보 전송을 확인하세요.
+
+---
+
 # 게스트 기보 수동 전송 배포 (2026-10-22)
 
 - 게스트는 **계정 연결 없이 대국**하고, 누적 전적과 AI/시간 설정을 기기에 저장하지 않습니다.
