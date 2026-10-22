@@ -1,0 +1,35 @@
+name: Janggi authentication PHP lint
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'includes/janggi_google_auth.php'
+      - 'includes/janggi_device_session.php'
+      - 'api/janggi/account.php'
+      - 'api/janggi/google-login.php'
+      - 'api/janggi/google-logout.php'
+      - 'api/janggi/google-start.php'
+      - 'api/janggi/records.php'
+      - '.github/workflows/janggi-auth-lint.yml'
+  pull_request:
+    paths:
+      - 'includes/janggi_google_auth.php'
+      - 'includes/janggi_device_session.php'
+      - 'api/janggi/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint modified Janggi PHP modules
+        run: |
+          php -l includes/janggi_google_auth.php
+          php -l includes/janggi_device_session.php
+          php -l api/janggi/account.php
+          php -l api/janggi/google-login.php
+          php -l api/janggi/google-logout.php
+          php -l api/janggi/google-start.php
+          php -l api/janggi/records.php
