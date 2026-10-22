@@ -26,7 +26,10 @@ $nonce=bin2hex(random_bytes(24));
 $_SESSION['janggi_google_nonce']=$nonce;
 // The Android TWA launcher has a dedicated start URL. This is a persistence
 // preference, NOT an authentication proof; a valid Google ID token is required.
-$_SESSION['janggi_login_client']=($_GET['client']??'')==='android'?'android':'web';
+$requestedApp=($_GET['client']??'')==='android';
+$androidBrowser=preg_match('/Android/i',(string)($_SERVER['HTTP_USER_AGENT']??''))===1;
+// A plain desktop browser must never opt into the long-lived app mode.
+$_SESSION['janggi_login_client']=$requestedApp&&$androidBrowser?'android':'web';
 session_write_close();
 ?>
 <!doctype html>
