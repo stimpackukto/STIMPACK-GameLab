@@ -48,7 +48,7 @@ if (!is_array($r)||($r['completed']??false)!==true ||
     guest_result(422,['ok'=>false,'message'=>'완료된 대국 정보가 올바르지 않습니다.']);
 }
 $moves=$r['moves']??null;
-if (!is_array($moves)||!array_is_list($moves)||count($moves)<1||count($moves)>240) {
+if (!is_array($moves)||!array_is_list($moves)||count($moves)>240) {
     guest_result(422,['ok'=>false,'message'=>'착수 기록이 올바르지 않습니다.']);
 }
 $cleanMoves=[];
