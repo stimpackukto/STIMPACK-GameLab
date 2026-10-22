@@ -24,6 +24,9 @@ if($client===''){http_response_code(503);
 janggi_google_session();
 $nonce=bin2hex(random_bytes(24));
 $_SESSION['janggi_google_nonce']=$nonce;
+// The Android TWA launcher has a dedicated start URL. This is a persistence
+// preference, NOT an authentication proof; a valid Google ID token is required.
+$_SESSION['janggi_login_client']=($_GET['client']??'')==='android'?'android':'web';
 session_write_close();
 ?>
 <!doctype html>
