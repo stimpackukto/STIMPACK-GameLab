@@ -98,6 +98,9 @@ window.initJanggiGoogle=function(){
     text:'signin_with',shape:'rectangular',width:300,locale:'ko'
   });
   statusNode.textContent='Google 계정을 선택하면 자동으로 연결됩니다.';
+  // Where supported, show the Google account chooser immediately; the
+  // official button remains as a fallback when One Tap is suppressed.
+  try{google.accounts.id.prompt();}catch(error){console.info('Google button remains available');}
 };
 </script>
 <script async defer src="https://accounts.google.com/gsi/client" onload="initJanggiGoogle()" onerror="document.getElementById('status').textContent='Google 로그인 서버에 연결하지 못했습니다.'"></script>
