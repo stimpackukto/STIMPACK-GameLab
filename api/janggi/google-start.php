@@ -14,7 +14,8 @@ header('Content-Type: text/html; charset=UTF-8');
 header('Cache-Control: no-store, private');
 header('Referrer-Policy: no-referrer');
 header('X-Content-Type-Options: nosniff');
-header('Content-Security-Policy: default-src \'none\'; script-src \'self\' https://accounts.google.com; style-src \'unsafe-inline\'; frame-src https://accounts.google.com; connect-src \'self\' https://accounts.google.com; img-src \'self\' https://*.googleusercontent.com data:; base-uri \'none\'; form-action \'none\'');
+// Login JavaScript is embedded here and Google injects identity iframes.
+// No game COEP/COOP is set on this dedicated PHP login page.
 $client=janggi_google_client_id();
 if($client===''){http_response_code(503);
     echo '<html lang="ko"><meta charset="utf-8"><p>Google 인증 설정이 필요합니다. 관리자에게 문의하세요.</p></html>';
