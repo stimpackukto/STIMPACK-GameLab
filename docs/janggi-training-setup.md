@@ -16,7 +16,7 @@
 /api/janggi/google-logout.php          신규 · 장기 계정만 로그아웃
 /api/janggi/account.php                변경 · 전용 세션만 확인
 /api/janggi/records.php                변경 · 전용 세션으로 기보 제출
-/janggi_privacy.html                   변경 · 개인정보 설명
+/busanbus/janggi_privacy.html          정식 개인정보처리방침 (Google Play 공개 URL)
 ```
 
 GitHub에 반영해도 **서버가 자동 배포되지 않으므로** `/var/www/gamelab`에서 인증된 `git pull --ff-only origin main`으로 반영하세요. 로컬 수정 충돌이 있으면 먼저 별도로 백업하고 GitHub와 비교해야 합니다. 기존 HMAC 비밀키 `/etc/stimpack/janggi_account_hmac.key`는 절대 변경하지 마세요.
