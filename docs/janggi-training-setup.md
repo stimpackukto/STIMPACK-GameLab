@@ -1,3 +1,32 @@
+# 장기 프로필·로그인 세션 분리 배포 (2026-10-23)
+
+**중요: Android 앱 로그인이 정상 유지되려면 서버 마이그레이션을 먼저 수행해야 합니다.** GitHub 파일 수정만으로는 배포되지 않습니다.
+
+### 서버 DB (선행 필수)
+- `sql/janggi_device_sessions.sql`을 기존 GAME LAB MySQL DB에 **한 번 실행**해 `gamelab_janggi_device_sessions`을 만듭니다.
+- `includes/janggi_device_session.php`에서 MySQL에 저장하는 것은 64자리 HMAC 가명 계정 ID, 랜덤 기기 토큰의 SHA-256 해시 및 발급·접속·만료시각입니다. Google 비밀번호·이름·이메일·원문 토큰은 서버의 기기 세션 DB에 저장하지 않습니다.
+- 토큰은 HttpOnly/Secure/SameSite=Lax이고 `/api/janggi/` 아래 요청에서만 전송됩니다. 기기 로그아웃 즉시 해당 해시를 DB에서 제거합니다.
+- 사용 중인 Android 앱은 토큰 만료일을 갱신하며 로그인 상태를 유지합니다. **365일간 사용하지 않거나 브라우저 쿠키 삭제·보안상 무효화 시에는 재로그인이 필요**합니다. 영구적으로 유효한 토큰은 만들지 않습니다.
+- 1일 1회 DB에서 `DELETE FROM gamelab_janggi_device_sessions WHERE expires_at < UTC_TIMESTAMP();` 정리를 권장합니다.
+- Android TWA는 사용자의 설치 브라우저를 사용하는 구조이므로 인증 쿠키나 사이트 데이터가 동일 브라우저와 공유될 수 있습니다. `?janggi_app=android` 표시값은 앱 경험에 맞춘 로그인 유지 옵션으로만 사용하며 계정 인증의 증거로 **신뢰하지 않습니다**. 서버는 반드시 Google ID 토큰 서명을 검증합니다.
+
+### 분리된 PC 세션
+- PC는 장기 페이지 활동이 없으면 서버의 마지막 인증 활동 시각 기준 **30분 뒤** 로그인 세션이 만료됩니다. 페이지를 새로 방문하거나 숨겨 둔 탭으로 돌아오면 서버 인증을 재확인하고 게스트로 전환합니다.
+- 장기 화면이 보이는 동안 5분마다 계정 상태를 확인하므로 장시간 정상 대국에서는 세션이 유지됩니다. 숨긴 탭이나 닫힌 페이지는 세션을 갱신하지 않습니다.
+- 서버 PHP-FPM `session.gc_maxlifetime`는 최소 1800초 이상으로 설정하고 기존 서버의 PHP 세션 청소 작업도 확인하세요. PC 인증은 별도 PHP 세션이고 Android 인증은 별도 DB 토큰입니다.
+- 서버 배포: `includes/janggi_device_session.php`, `includes/janggi_google_auth.php`, `api/janggi/google-start.php`, `api/janggi/google-login.php`, `api/janggi/account.php`, `api/janggi/google-logout.php`, `api/janggi/records.php`.
+- 앱/웹 배포: 장기 저장소 `src/janggi-session.js`, `src/practice-rank.js`, `src/account-ui.js`, `src/main-menu.js`, `src/game.js`, `assets/avatar_commander.svg`. Android TWA 런처 URL이 바뀌었으므로 새 앱 릴리스도 필요합니다.
+- 전적·연습 등급은 기기별 저장으로, 서버 동기화나 공인 장기 단·급 기능이 아닙니다. **승리 +3, 패배 -1, 20점마다 승급**, 18급에서 9단까지 게임 내 연습 표기로만 적용됩니다.
+
+### 배포 전 확인
+1. DB 테이블을 설치하고 변경된 서버 PHP를 함께 배포합니다. `php -l`로 구문을 검사합니다.
+2. Android 앱 최신 버전에서 Google 인증 → 홈 복귀 → 브라우저/앱 재시작 → 로그인 유지 → 로그아웃 → 재시작 시 게스트인지 확인합니다.
+3. PC에서 로그인 → 30분 동안 장기 페이지를 닫거나 숨김 → 재방문 시 게스트, 30분 미만 재방문 시 로그인 유지 여부를 확인합니다.
+4. PC 탭에서 5분 이상 보이는 상태로 대국하며 유휴 만료 없이 완료 기보 전송이 가능한지 확인합니다.
+5. 신규 DB 없이 Android 로그인을 진행하면 503 오류가 발생하므로 앱 테스트 전에 반드시 설치합니다.
+
+---
+
 # 장기 전용 Google 로그인 배포 (2026-10-22)
 
 **기존 `/auth/google_login.php` 및 `$_SESSION['google_user']`는 장기에서 더 이상 사용하지 않습니다.** 인증 페이지는 `/api/janggi/google-start.php`로 분리되어 있으며 별도의 `STIMPACK_JANGGI_AUTH` PHP 세션을 사용합니다.
