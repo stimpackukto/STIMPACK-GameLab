@@ -35,11 +35,14 @@ $host=(string)($_SERVER['HTTP_HOST']??'');
 if ($origin!=='' && $origin!=='https://'.$host) {
     out(403,['ok'=>false,'message'=>'잘못된 요청 출처입니다.']);
 }
-session_set_cookie_params(['lifetime'=>0,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);
-if (session_status()!==PHP_SESSION_ACTIVE) session_start();
-$user=$_SESSION['google_user']??null;
-if (!is_array($user)||!is_string($user['sub']??null)||trim($user['sub'])==='') {
-    out(401,['ok'=>false,'message'=>'GAME LAB Google 로그인이 필요합니다.']);
+// The Janggi-only session is issued after independently verifying a
+// Google ID token. Never accept the existing GAME LAB google_user session.
+require_once dirname(__DIR__,2).'/includes/janggi_google_auth.php';
+janggi_google_session();
+$user=$_SESSION['janggi_identity']??null;
+if(!is_array($user)||!is_string($user['sub']??null)||
+   ($user['consentVersion']??'')!=='janggi-ai-training-v1'){
+    out(401,['ok'=>false,'message'=>'장기 전용 Google 인증이 필요합니다.']);
 }
 require_once dirname(__DIR__, 2) . '/includes/janggi_account_key.php';
 $key=janggi_pseudonymous_account_id((string)$user['sub']);
