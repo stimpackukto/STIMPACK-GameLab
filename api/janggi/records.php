@@ -37,16 +37,14 @@ if ($origin!=='' && $origin!=='https://'.$host) {
 }
 // The Janggi-only session is issued after independently verifying a
 // Google ID token. Never accept the existing GAME LAB google_user session.
-require_once dirname(__DIR__,2).'/includes/janggi_google_auth.php';
-janggi_google_session();
-$user=$_SESSION['janggi_identity']??null;
-if(!is_array($user)||!is_string($user['sub']??null)||
-   ($user['consentVersion']??'')!=='janggi-ai-training-v1'){
-    out(401,['ok'=>false,'message'=>'장기 전용 Google 인증이 필요합니다.']);
+require_once dirname(__DIR__,2).'/includes/janggi_device_session.php';
+try{
+    $key=janggi_authenticated_account_key();
+}catch(Throwable $e){
+    error_log('janggi_record_session: lookup unavailable');
+    out(503,['ok'=>false,'message'=>'장기 인증 서버가 준비되지 않았습니다.']);
 }
-require_once dirname(__DIR__, 2) . '/includes/janggi_account_key.php';
-$key=janggi_pseudonymous_account_id((string)$user['sub']);
-if ($key===null)out(503,['ok'=>false,'message'=>'장기 계정 서버 설정이 필요합니다.']);
+if($key===null)out(401,['ok'=>false,'message'=>'장기 전용 Google 인증이 필요합니다.']);
 
 // No extra data about the user is persisted. Only a pseudonymous account key
 // attached to a consented record, so the account can delete its own records.
