@@ -153,24 +153,24 @@ PHP 코드만 변경한 경우 Nginx 재시작은 불필요합니다. PHP OPcach
 
 `STIMPACK_JANGGI_ACCOUNT_HMAC_SECRET`을 PHP-FPM 풀 환경변수로 제공해도 됩니다. 이 방식은 FPM 풀 설정 변경 및 재시작이 필요할 수 있습니다. 운영 방식은 하나로 통일하고, 두 경로의 키가 다르지 않도록 주의하세요.
 
-**중요:** 계정 연결 자체에는 SQL 테이블 생성이 필요하지 않습니다. 기보 서버 저장을 활성화할 때 1단계의 DB 마이그레이션과 별도 수집/보존 테스트가 필요합니다.
+**중요:** PC의 짧은 PHP 인증 세션만 사용할 때는 별도 인증 DB가 필요하지 않지만, Android 앱의 로그아웃 전 로그인 유지에는 `sql/janggi_device_sessions.sql`의 테이블 설치가 필수입니다. 기보 DB와 기기 세션 DB는 용도가 다릅니다.
 
 ## 3. 동일 출처 웹 배포 (필수)
 
 장기 Phaser 앱을 `https://stimpack.pe.kr/` 도메인 아래 경로로 서비스해야 합니다. 장기는 배포 경로를 강제하지 않으며 예를 들면 `/janggi/`에 배치할 수 있습니다.
 
-- `https://stimpack.pe.kr/auth/google_login.php`: 기존 Google 로그인
+- `https://stimpack.pe.kr/api/janggi/google-start.php`: 장기 전용 Google 로그인
 - `https://stimpack.pe.kr/api/janggi/account.php`: 로그인 사용자 확인
 - `https://stimpack.pe.kr/api/janggi/records.php`: 동의된 기보 수신/본인 기보 삭제
-- `https://stimpack.pe.kr/janggi_privacy.html`: 수집·이용 정책 안내
+- `https://stimpack.pe.kr/busanbus/janggi_privacy.html`: 수집·이용 정책 안내
 
-로그인은 새 브라우저 탭에서 진행되며 성공 후 GAME LAB 메인으로 돌아갑니다. 이용자는 장기 탭으로 돌아와 **연결 확인**을 눌러야 합니다. 이 과정에서 Google 토큰을 장기 앱에 전달하지 않습니다.
+장기 전용 Google 로그인 화면에서 인증에 성공하면 `/games/janggi/`로 바로 복귀합니다. 장기 계정의 재확인은 `/api/janggi/account.php`에서 직접 수행하며 별도의 연결 확인 버튼은 사용하지 않습니다.
 
-로컬 `http://localhost:8000`, 다른 도메인, Android WebView의 별도 출처에서는 의도적으로 전송을 차단합니다. Android 네이티브까지 지원하려면 별도의 안전한 로그인/출처 통합 설계가 필요합니다. 와일드카드 CORS, 임의 토큰 전달, 사용자 임의 아이디로 전송하는 방식은 사용하지 않습니다.
+로컬 `http://localhost:8000`과 다른 도메인은 공식 Google 인증 및 기보 전송이 차단됩니다. Android 앱은 네이티브 WebView가 아닌 검증된 TWA 브라우저로 같은 웹 출처를 사용합니다. 와일드카드 CORS, 임의 토큰 전달, 사용자 임의 아이디로 전송하는 방식은 사용하지 않습니다.
 
 ## 4. 개인정보 정책 및 선택 동의
 
-계정 연결과 AI 기보 수집 동의는 **별개 선택**입니다. 계정만 연결해도 대국할 수 있고, 동의 체크는 초기에는 해제되어 있습니다.
+Google 계정 연결 전에 AI 학습용 기보 전송에 대한 **명시적 동의**를 먼저 받습니다. 동의하지 않아도 게스트로 게임을 즐길 수 있습니다.
 
 동의 대상: 종료된 장기 수순 좌표·승패·사용 엔진·대국시간·초기 배치·종료 사유·게임 ID. 계정 이름/이메일/Google 로그인 토큰/기기 설정은 기보 DB에 포함되지 않습니다. 연락처, IP, 앱 사용 분석 값도 기보 요청 payload에 포함되지 않습니다(인프라 웹서버 접속 로그는 별도 관리 필요).
 
@@ -187,11 +187,11 @@ PHP 코드만 변경한 경우 Nginx 재시작은 불필요합니다. PHP OPcach
 ## 5. 점검
 
 1. 비로그인 `GET /api/janggi/account.php` → `authenticated:false`
-2. 로그인 후 확인 → 가명 `user.id` 및 표시용 프로필 반환 (장기 계정 DB 저장 없음)
+2. 로그인 직후 Google 인증 결과에만 표시용 프로필이 포함되고, 이후 `GET /api/janggi/account.php`는 가명 `user.id`만 반환 (앱의 인증 DB에는 이메일·이름 없음)
 3. 동의 안 함 → 기보 POST 없음
 4. 동의 후 실제 대국 종료 → 기보 1건 POST (게임 ID로 중복 방지)
 5. 동의 철회 후 대국 종료 → POST 없음
-6. 계정 연결 해제 → 기기 프로필/동의 사라짐, Google 세션은 유지
+6. 계정 연결 해제 → 서버의 Android 기기 토큰 또는 PC 세션이 해제되고 로컬 프로필/동의 상태가 지워짐
 7. 삭제 → 인증된 계정의 서버 기보 삭제 후 로컬 동의도 철회
 8. 365일 이전 기보 → 정리 cron으로 삭제
 
