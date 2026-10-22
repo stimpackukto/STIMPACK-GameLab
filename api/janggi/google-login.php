@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once dirname(__DIR__,2).'/includes/janggi_google_auth.php';
 require_once dirname(__DIR__,2).'/includes/janggi_account_key.php';
+require_once dirname(__DIR__,2).'/includes/janggi_device_session.php';
 janggi_auth_headers();
 if(($_SERVER['REQUEST_METHOD']??'')!=='POST'){
     header('Allow: POST');janggi_auth_json(405,['ok'=>false,'message'=>'POST만 허용됩니다.']);
@@ -27,6 +28,8 @@ if(!is_string($nonce)||!preg_match('/^[a-f0-9]{48}$/D',$nonce))
     janggi_auth_json(403,['ok'=>false,'message'=>'Google 로그인 요청을 다시 시작해 주세요.']);
 // Prevent replay: the nonce is one-use, including failed token attempts.
 unset($_SESSION['janggi_google_nonce']);
+$loginClient=$_SESSION['janggi_login_client']??'web';
+unset($_SESSION['janggi_login_client']);
 try{
     $user=janggi_verify_google_token($data['credential'],$audience,$nonce);
 }catch(Throwable $e){
@@ -37,8 +40,22 @@ if($user===null)janggi_auth_json(401,['ok'=>false,'message'=>'Google 인증 결�
 $id=janggi_pseudonymous_account_id($user['sub']);
 if($id===null)janggi_auth_json(503,['ok'=>false,'message'=>'장기 서버 비밀키 설정이 필요합니다.']);
 session_regenerate_id(true);
-// No Google token, e-mail, or name is written to the server-side session.
-$_SESSION['janggi_identity']=['sub'=>$user['sub'],'consentVersion'=>'janggi-ai-training-v1'];
+if($loginClient==='android'){
+    try {
+        // A durable browser cookie is stored by the Android TWA browser.
+        // The DB stores only its SHA-256 hash and an HMAC account identifier.
+        janggi_issue_device_login($id);
+    }catch(Throwable $e){
+        error_log('janggi_device_login: cannot persist secure device session');
+        session_write_close();
+        janggi_auth_json(503,['ok'=>false,'message'=>'기기 로그인 저장을 설정하지 못했습니다.']);
+    }
+    unset($_SESSION['janggi_identity'],$_SESSION['janggi_last_active']);
+}else{
+    // PC session is valid only while active; independent of GAME LAB login.
+    $_SESSION['janggi_identity']=['sub'=>$user['sub'],'consentVersion'=>'janggi-ai-training-v1'];
+    $_SESSION['janggi_last_active']=time();
+}
 session_write_close();
 janggi_auth_json(200,['ok'=>true,'authenticated'=>true,'user'=>[
     'id'=>$id,'name'=>$user['name'],'email'=>$user['email'],'picture'=>$user['picture']
