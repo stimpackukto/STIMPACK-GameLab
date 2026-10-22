@@ -40,6 +40,15 @@ if($user===null)janggi_auth_json(401,['ok'=>false,'message'=>'Google 인증 결�
 $id=janggi_pseudonymous_account_id($user['sub']);
 if($id===null)janggi_auth_json(503,['ok'=>false,'message'=>'장기 서버 비밀키 설정이 필요합니다.']);
 session_regenerate_id(true);
+// Re-authenticating with Google replaces any previous remembered browser login.
+// The old token is revoked rather than left active until its expiry date.
+try{
+    if(janggi_device_cookie_value()!==null)janggi_revoke_device_login();
+}catch(Throwable $e){
+    error_log('janggi_device_login: previous device session revocation failed');
+    session_write_close();
+    janggi_auth_json(503,['ok'=>false,'message'=>'기존 로그인 세션을 정리하지 못했습니다.']);
+}
 if($loginClient==='android'){
     try {
         // A durable browser cookie is stored by the Android TWA browser.
