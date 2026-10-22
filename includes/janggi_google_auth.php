@@ -10,6 +10,15 @@ function janggi_google_client_id(): string {
     if (!is_string($value)||$value==='') {
         $value=@file_get_contents('/etc/stimpack/janggi_google_client_id');
     }
+    // Optional zero-setup fallback: reuse the existing public OAuth client ID,
+    // but NEVER the old GAME LAB login flow, session or OAuth client secret.
+    if(!is_string($value)||trim($value)===''){
+        $old='/etc/stimpack/google_oauth.php';
+        if(is_file($old)){
+            $cfg=@include $old;
+            if(is_array($cfg))$value=$cfg['client_id']??'';
+        }
+    }
     $value=trim(is_string($value)?$value:'');
     return preg_match('/^[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/D',$value)?$value:'';
 }
