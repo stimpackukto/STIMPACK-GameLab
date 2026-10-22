@@ -33,6 +33,9 @@ function janggi_google_session(): void {
     session_name('STIMPACK_JANGGI_AUTH');
     ini_set('session.use_strict_mode','1');
     ini_set('session.use_only_cookies','1');
+    // PHP session is for short desktop authorization/Google login nonce only.
+    // Long-lived TWA logins are hashed, revocable DB tokens instead.
+    ini_set('session.gc_maxlifetime',(string)max(1800,(int)ini_get('session.gc_maxlifetime')));
     session_set_cookie_params([
         'lifetime'=>0,'path'=>'/api/janggi/','secure'=>true,
         'httponly'=>true,'samesite'=>'Lax'
