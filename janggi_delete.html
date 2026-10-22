@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="index,follow">
+<meta name="theme-color" content="#111a2d">
+<title>장기 계정 및 데이터 삭제 | STIMPACK 장기</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}
+body{background:radial-gradient(ellipse at 50% 0%,#2c3954,#0c1529 65%);margin:0;color:#f3ebdd;font:16px/1.85 system-ui,'Malgun Gothic',sans-serif;word-break:keep-all}
+main{width:min(690px,calc(100% - 32px));margin:0 auto;padding:45px 0 80px}
+h1{font-size:clamp(27px,5vw,35px);line-height:1.35;color:#f4d49f;margin:8px 0 16px}
+h2{font-size:20px;color:#e8cc9c;margin:22px 0 10px}
+a{color:#d2e7ff;text-underline-offset:4px}
+.card{border:1px solid #54637e;border-radius:14px;background:#18253d;padding:20px 22px;margin-top:20px}
+ul{padding-left:23px}li{margin:6px 0}label{display:flex;gap:12px;align-items:start;line-height:1.6;cursor:pointer;padding:13px;border-radius:11px;background:#29374d}
+input[type=checkbox]{width:22px;height:22px;accent-color:#8ccbaa;flex:none;margin-top:3px}
+button{border:1px solid #d2b275;background:#7a2b35;color:#fff;font:700 16px system-ui,sans-serif;border-radius:11px;padding:13px 20px;cursor:pointer;width:100%;margin-top:17px}
+button:disabled{opacity:.45;cursor:not-allowed}
+#status{min-height:66px;background:#102c2e;border:1px solid #436a64;border-radius:10px;padding:13px 15px;margin:14px 0 0}
+.small{font-size:13px;color:#bfcbda}
+footer{margin-top:27px;text-align:center;color:#c7ccd8;font-size:13px}
+</style>
+</head>
+<body><main>
+<div style="font:700 13px Georgia,serif;letter-spacing:.2em;color:#e9c28a">STIMPACK GAME LAB</div>
+<h1>장기 계정 및 데이터 삭제</h1>
+<p>STIMPACK 장기의 계정 연결과 저장된 대국 기보를 삭제하기 위한 페이지입니다. 이용자는 언제든지 계정 연동을 해제하고 본인 계정에 연결된 서버 기보를 삭제할 수 있습니다.</p>
+<div class="card"><h2>삭제할 데이터</h2><ul>
+<li><strong>서버:</strong> 인증된 장기 Google 계정의 가명 식별자에 연결된 모든 AI 학습용 기보</li>
+<li><strong>현재 기기:</strong> 장기 계정 표시정보, 승패, 게임 설정, 기보 전송 통계, 장기 로그인 세션</li>
+</ul><p class="small">Google 계정 자체 및 다른 STIMPACK GAME LAB 서비스의 계정 데이터는 삭제하지 않습니다. 익명으로 제출된 게스트 기보는 계정과 연결되지 않아 이 방식으로 삭제할 수 없습니다. 별도 서버 접속 로그는 서비스 보안·운영 기준에 따라 관리됩니다.</p></div>
+<div class="card">
+<h2>내 장기 계정 확인</h2>
+<p id="status" role="status" aria-live="polite">계정 인증 상태를 확인하고 있습니다…</p>
+<label><input id="agree" type="checkbox" disabled> <span>내 장기 Google 계정에 연결된 서버 기보와 이 기기의 계정 정보를 삭제하는 것에 동의합니다. 삭제한 서버 기보는 되돌릴 수 없습니다.</span></label>
+<button id="delete" type="button" disabled>계정 및 데이터 영구 삭제</button>
+<p class="small">인증되지 않았다면 <a href="/games/janggi/">장기 게임</a>으로 돌아가 계정 관리 메뉴에서 동일 Google 계정으로 연결한 다음 이 페이지를 다시 열어 주세요.</p>
+</div>
+<footer><a href="/janggi_privacy.html">개인정보처리방침</a>　·　<a href="/games/janggi/">STIMPACK 장기</a></footer>
+</main>
+<script>
+'use strict';
+const statusNode=document.getElementById('status');
+const checkbox=document.getElementById('agree');
+const button=document.getElementById('delete');
+let accountId=null;
+function setStatus(message){statusNode.textContent=message;}
+async function checkAccount(){
+  try{
+    const response=await fetch('/api/janggi/account.php',{credentials:'same-origin',cache:'no-store'});
+    const result=await response.json();
+    if(!response.ok||!result?.authenticated||!/^[a-f0-9]{64}$/.test(result.user?.id||'')){
+      setStatus('연결된 장기 Google 계정이 없습니다. 장기 계정 관리에서 Google 인증 후 다시 접속해 주세요.');
+      return;
+    }
+    accountId=result.user.id;
+    checkbox.disabled=false;
+    setStatus('장기 Google 계정 인증 완료. 삭제하려면 아래 항목에 체크한 후 삭제 버튼을 눌러 주세요.');
+  }catch(error){setStatus('계정 인증 상태를 확인할 수 없습니다. 인터넷 연결 및 서버 상태를 확인해 주세요.');}
+}
+checkbox.addEventListener('change',()=>{button.disabled=!accountId||!checkbox.checked;});
+button.addEventListener('click',async()=>{
+  if(!accountId||!checkbox.checked)return;
+  if(!confirm('정말 장기 계정 연결과 서버에 저장된 기보를 영구 삭제할까요?'))return;
+  button.disabled=true;checkbox.disabled=true;setStatus('서버의 계정 기보를 삭제하고 있습니다…');
+  try{
+    const response=await fetch('/api/janggi/records.php',{
+      method:'DELETE',credentials:'same-origin',cache:'no-store',
+      headers:{'X-STIMPACK-Request':'janggi','Accept':'application/json'}
+    });
+    const result=await response.json();
+    if(!response.ok||result?.ok!==true)throw Error(result?.message||'삭제 요청이 실패했습니다.');
+    // Only remove this account's keys; never wipe unrelated site data.
+    const prefix='stimpack_janggi_player_v2:'+accountId+':';
+    for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key&&key.startsWith(prefix))localStorage.removeItem(key);}
+    const settings=localStorage.getItem('stimpack_janggi_account_v1');
+    try{if(JSON.parse(settings||'null')?.profile?.id===accountId)localStorage.removeItem('stimpack_janggi_account_v1');}catch{}
+    ['stimpack_janggi_stats_v1','stimpack_janggi_engine_v1','stimpack_janggi_time_preset_v1'].forEach(k=>localStorage.removeItem(k));
+    await fetch('/api/janggi/google-logout.php',{
+      method:'POST',credentials:'same-origin',cache:'no-store',
+      headers:{'X-STIMPACK-Request':'janggi-google','Content-Type':'application/json'},body:'{}'
+    });
+    accountId=null;checkbox.checked=false;
+    setStatus('계정에 연결된 서버 기보 삭제가 완료되었습니다. 삭제된 기보 '+Number(result.deleted||0)+'건. 현재 기기의 장기 계정 연결과 저장 정보도 해제했습니다.');
+  }catch(error){setStatus('삭제가 완료되지 않았습니다: '+String(error?.message||error)+'. 다시 시도해 주세요.');checkbox.disabled=false;button.disabled=!checkbox.checked;}
+});
+void checkAccount();
+</script>
+</body></html>
