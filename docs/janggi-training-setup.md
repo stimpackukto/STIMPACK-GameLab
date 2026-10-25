@@ -1,3 +1,33 @@
+# Android WebView Google 로그인 연동 (2026-10-25)
+
+TWA에서 WebView+AdMob으로 변경하면 Chrome의 Google 인증 쿠키가 WebView에 공유되지 않습니다. Google 로그인은 외부 Chrome에서 처리하고, WebView는 **독립된 5분 유효 일회용 페어링**을 이용합니다.
+
+## 배포 순서
+
+1. **DB 선행:** `sql/janggi_webview_pairing.sql` 파일을 GAME LAB MySQL DB에 한 번 실행합니다. 기존 `gamelab_janggi_device_sessions` 테이블은 유지합니다.
+2. **서버 배포:** `api/janggi/webview-pair.php`, `api/janggi/google-start.php`, `api/janggi/google-login.php`를 배포합니다. 이 3개 파일을 전부 배포하기 전까지 Android 앱의 새 로그인 버튼은 사용할 수 없습니다.
+3. **문법 확인:** `php -l api/janggi/webview-pair.php && php -l api/janggi/google-start.php && php -l api/janggi/google-login.php`
+4. **웹 배포:** 장기 저장소의 `src/account-ui.js`, `src/main-menu.js`, `src/game.js`, `index.html`을 함께 동기화합니다.
+5. **Android 앱:** 버전 1.1.3 (versionCode 10)으로 재빌드합니다. Google 계정 버튼을 누르면 시스템 브라우저에서 인증하고 앱으로 돌아와 연결 완료를 확인합니다.
+
+## 보안 원칙
+
+- WebView가 생성한 `id`와 `secret` 중 브라우저에는 **id만** 전달됩니다. 원문 `secret`은 WebView 메모리에만 유지합니다.
+- Google 서명·nonce를 서버에서 검증한 후에만 페어링을 승인합니다.
+- WebView는 secret 확인 후 별도의 HttpOnly Secure 기기 세션 쿠키를 발급받습니다. Google 토큰이나 Chrome 쿠키를 앱으로 복사하지 않습니다.
+- 페어링은 최초 인증 후 1회만 교환되고 5분 뒤 만료됩니다. 정리: `DELETE FROM gamelab_janggi_webview_pairs WHERE expires_at < UTC_TIMESTAMP();`
+- Chrome 로그인에서 WebView로 자동 전환시키지 않으므로, 사용자에게 인증 후 **뒤로가기로 장기 앱에 복귀**하도록 안내합니다.
+- 기존 WebView Fairy-Stockfish용 서버 COOP/COEP/Document-Isolation-Policy 헤더와 AdMob 구현은 변경하지 않습니다.
+
+## 확인 항목
+
+- WebView에서 동의 후 Google 로그인 → Chrome 계정 선택 → 앱 복귀 → 내 정보 계정 연결 확인
+- 앱 재실행 후 로그인 유지, 로그아웃 후 게스트 전환
+- 다른 계정 연결 시 이전 기기 세션이 유지되지 않는지 확인
+- PC 웹 로그인 변경 없음, Fairy-Stockfish WASM 응수와 AdMob 배너 정상 동작 확인
+
+---
+
 # 장기 프로필·로그인 세션 분리 배포 (2026-10-23)
 
 **중요: Android 앱 로그인이 정상 유지되려면 서버 마이그레이션을 먼저 수행해야 합니다.** GitHub 파일 수정만으로는 배포되지 않습니다.
