@@ -24,6 +24,9 @@ if($client===''){http_response_code(503);
 janggi_google_session();
 $nonce=bin2hex(random_bytes(24));
 $_SESSION['janggi_google_nonce']=$nonce;
+// Pair ID is public routing data; the WebView retains an independent secret.
+$pairId=(string)($_GET['webview_pair']??'');
+$_SESSION['janggi_webview_pair']=preg_match('/^[0-9a-f]{48}$/D',$pairId)?$pairId:null;
 // The Android TWA launcher has a dedicated start URL. This is a persistence
 // preference, NOT an authentication proof; a valid Google ID token is required.
 $requestedApp=($_GET['client']??'')==='android';
@@ -83,7 +86,9 @@ window.handleJanggiGoogleCredential=async function(reply){
     // No Google credential, access token or PHP session id enters storage.
     const module=await import('/games/janggi/src/account-link.js');
     module.applyVerifiedAccount(localStorage,result.user,{enableTraining:true});
-    location.replace('/games/janggi/');
+    if(new URLSearchParams(location.search).has('webview_pair')){
+      statusNode.textContent='앱 계정 연결이 완료되었습니다. 장기 앱으로 돌아가세요.';
+    }else location.replace('/games/janggi/');
   }catch(error){
     statusNode.textContent=String(error?.message||error);
     inFlight=false;
