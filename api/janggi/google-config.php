@@ -11,4 +11,7 @@ $client=janggi_google_client_id();
 if($client==='')janggi_auth_json(503,['ok'=>false,'message'=>'장기 Google 클라이언트 ID 설정이 필요합니다.']);
 janggi_google_session();
 $_SESSION['janggi_google_nonce']=bin2hex(random_bytes(24));
+// Only the Google-signed ID token can authenticate; app marker sets cookie lifetime.
+$_SESSION['janggi_login_client']=(($_SERVER['HTTP_X_STIMPACK_APP']??'')==='android-webview'
+    && preg_match('/Android/i',(string)($_SERVER['HTTP_USER_AGENT']??'')))?'android':'web';
 janggi_auth_json(200,['ok'=>true,'clientId'=>$client,'nonce'=>$_SESSION['janggi_google_nonce']]);
