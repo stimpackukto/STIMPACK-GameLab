@@ -29,6 +29,8 @@ if(!is_string($nonce)||!preg_match('/^[a-f0-9]{48}$/D',$nonce))
 // Prevent replay: the nonce is one-use, including failed token attempts.
 unset($_SESSION['janggi_google_nonce']);
 $loginClient=$_SESSION['janggi_login_client']??'web';
+$webviewPair=$_SESSION['janggi_webview_pair']??null;
+unset($_SESSION['janggi_webview_pair']);
 unset($_SESSION['janggi_login_client']);
 try{
     $user=janggi_verify_google_token($data['credential'],$audience,$nonce);
@@ -39,6 +41,20 @@ try{
 if($user===null)janggi_auth_json(401,['ok'=>false,'message'=>'Google 인증 결과가 올바르지 않습니다.']);
 $id=janggi_pseudonymous_account_id($user['sub']);
 if($id===null)janggi_auth_json(503,['ok'=>false,'message'=>'장기 서버 비밀키 설정이 필요합니다.']);
+// Approve an existing short-lived pairing only after Google signature/nonce validation.
+if(is_string($webviewPair)&&preg_match('/^[0-9a-f]{48}$/D',$webviewPair)){
+    try{
+        $db=janggi_device_db();
+        $q=$db->prepare("UPDATE gamelab_janggi_webview_pairs
+          SET account_key=?,state='approved'
+          WHERE pair_hash=? AND state='pending' AND expires_at>UTC_TIMESTAMP()");
+        $q->execute([$id,hash('sha256',$webviewPair)]);
+        if($q->rowCount()!==1)janggi_auth_json(410,['ok'=>false,'message'=>'앱 연결 시간이 만료되었습니다.']);
+    }catch(Throwable $e){
+        error_log('janggi_webview_pair approval failed');
+        janggi_auth_json(503,['ok'=>false,'message'=>'앱 연결을 완료할 수 없습니다.']);
+    }
+}
 session_regenerate_id(true);
 // Re-authenticating with Google replaces any previous remembered browser login.
 // The old token is revoked rather than left active until its expiry date.
