@@ -42,10 +42,15 @@ try {
    AND last_seen>=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 24 HOUR)");
   $q->execute([$peer]);
   if(!(int)$q->fetchColumn())invite_reply(409,['ok'=>false,'error'=>'friend_offline']);
-  $q=$db->prepare("SELECT id FROM janggi_friend_invitations WHERE sender_key=?
-   AND receiver_key=? AND status IN ('pending','accepted') ORDER BY id DESC LIMIT 1");
-  $q->execute([$me,$peer]);$existing=$q->fetchColumn();
-  if($existing)invite_reply(200,['ok'=>true,'id'=>(int)$existing,'status'=>'pending']);
+  // Only an actually live invitation/room may block another invitation.
+  $q=$db->prepare("SELECT i.id,i.status FROM janggi_friend_invitations i
+   LEFT JOIN janggi_pvp_rooms r ON r.id=i.room_id
+   WHERE i.sender_key=? AND i.receiver_key=?
+   AND (i.status='pending' OR (i.status='accepted' AND r.status IN ('ready','playing')
+        AND r.deadline_at>UTC_TIMESTAMP()))
+   ORDER BY i.id DESC LIMIT 1");
+  $q->execute([$me,$peer]);$existing=$q->fetch(PDO::FETCH_ASSOC);
+  if($existing)invite_reply(200,['ok'=>true,'id'=>(int)$existing['id'],'status'=>$existing['status']]);
   $q=$db->prepare("INSERT INTO janggi_friend_invitations(sender_key,receiver_key) VALUES(?,?)");
   $q->execute([$me,$peer]);
   $newId=(int)$db->lastInsertId();
@@ -59,7 +64,11 @@ try {
    JOIN janggi_friend_requests f ON f.status='accepted'
     AND ((f.sender_key=i.sender_key AND f.receiver_key=i.receiver_key)
       OR (f.sender_key=i.receiver_key AND f.receiver_key=i.sender_key))
-   WHERE (i.sender_key=? OR i.receiver_key=?) AND i.status IN ('pending','accepted')
+   LEFT JOIN janggi_pvp_rooms r ON r.id=i.room_id
+   WHERE (i.sender_key=? OR i.receiver_key=?)
+     AND (i.status='pending' OR
+      (i.status='accepted' AND r.status IN ('ready','playing')
+       AND r.deadline_at>UTC_TIMESTAMP()))
    ORDER BY i.id DESC LIMIT 40");
   $q->execute([$me,$me,$me]);
   $items=[];
