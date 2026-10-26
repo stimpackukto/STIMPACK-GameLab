@@ -45,4 +45,9 @@ server.on('upgrade',(req,socket,head)=>{
   wss.handleUpgrade(req,socket,head,ws=>attach(account,ws));
  }catch{socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');socket.destroy();}
 });
+// Keep otherwise idle WSS connections healthy through Nginx without DB queries.
+const heartbeat=setInterval(()=>{for(const client of wss.clients){
+ if(client.readyState===1){try{client.ping();}catch{client.terminate();}}
+}},30000);
+heartbeat.unref?.();
 server.listen(18771,'127.0.0.1',()=>console.log('Janggi friend notifications on 127.0.0.1:18771'));
