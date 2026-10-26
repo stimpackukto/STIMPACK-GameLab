@@ -1,0 +1,1 @@
+ALTER TABLE janggi_pvp_rooms ADD COLUMN dice_blue TINYINT UNSIGNED NULL, ADD COLUMN dice_red TINYINT UNSIGNED NULL, ADD COLUMN starter_side ENUM('blue','red') NULL;
