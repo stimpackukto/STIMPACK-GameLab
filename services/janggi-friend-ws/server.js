@@ -18,6 +18,22 @@ function attach(account,ws){
 }
 const server=http.createServer((req,res)=>{
  if(req.url==='/health'&&req.method==='GET'){res.writeHead(200);res.end('ok');return;}
+ if(req.url==='/presence'&&req.method==='POST'){
+  let body='';req.on('data',chunk=>{body+=chunk;if(body.length>1024)req.destroy();});
+  req.on('end',()=>{
+   if(!safeEqual(req.headers['x-janggi-signature'],sign(body))){res.writeHead(403);res.end();return;}
+   let data;try{data=JSON.parse(body);}catch{res.writeHead(400);res.end();return;}
+   if(!Array.isArray(data.accounts)||data.accounts.length>100||
+      data.accounts.some(key=>typeof key!=='string'||!/^[a-f0-9]{64}$/.test(key))){
+    res.writeHead(400);res.end();return;
+   }
+   const online=data.accounts.filter(key=>{
+    const peers=channels.get(key);return !!peers&&Array.from(peers).some(ws=>ws.readyState===1);
+   });
+   res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
+   res.end(JSON.stringify({ok:true,online:online}));
+  });return;
+ }
  if(req.url!=='/notify'||req.method!=='POST'){res.writeHead(404);res.end();return;}
  let data='';req.on('data',chunk=>{data+=chunk;if(data.length>1024)req.destroy();});
  req.on('end',()=>{
