@@ -49,5 +49,5 @@ server.on('upgrade',(req,socket,head)=>{
 const heartbeat=setInterval(()=>{for(const client of wss.clients){
  if(client.readyState===1){try{client.ping();}catch{client.terminate();}}
 }},30000);
-heartbeat.unref?.();
+heartbeat.unref();
 server.listen(18771,'127.0.0.1',()=>console.log('Janggi friend notifications on 127.0.0.1:18771'));
