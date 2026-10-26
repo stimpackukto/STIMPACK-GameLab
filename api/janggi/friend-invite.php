@@ -51,7 +51,7 @@ try {
  }
  if($action==='list'){
   $q=$db->prepare("SELECT i.id,i.sender_key,i.receiver_key,i.status,i.room_id,i.created_at,
-   CASE WHEN i.sender_key=? THEN f.receiver_name ELSE f.sender_name END AS name
+   CASE WHEN f.sender_key=(CASE WHEN i.sender_key=? THEN i.receiver_key ELSE i.sender_key END) THEN f.sender_name ELSE f.receiver_name END AS name
    FROM janggi_friend_invitations i
    JOIN janggi_friend_requests f ON f.status='accepted'
     AND ((f.sender_key=i.sender_key AND f.receiver_key=i.receiver_key)
@@ -63,7 +63,8 @@ try {
   foreach($q->fetchAll(PDO::FETCH_ASSOC) as $row){
    $outgoing=hash_equals($me,$row['sender_key']);
    $items[]=['id'=>(int)$row['id'],'name'=>$row['name'],'outgoing'=>$outgoing,
-    'status'=>$row['status'],'roomReady'=>$row['room_id']!==null];
+    'status'=>$row['status'],'peer'=>$outgoing?$row['receiver_key']:$row['sender_key'],
+    'roomReady'=>$row['room_id']!==null];
   }
   invite_reply(200,['ok'=>true,'items'=>$items]);
  }
