@@ -37,6 +37,8 @@ function attach(account,peers,ws){
   const set=channels.get(account);if(!set)return;
   set.delete(ws);if(!set.size){channels.delete(account);publishPresence(account,false);}
  });
+ ws.isAlive=true;
+ ws.on('pong',()=>{ws.isAlive=true;});
  ws.on('message',()=>ws.close(1008,'read only'));
 }
 const server=http.createServer((req,res)=>{
@@ -90,7 +92,11 @@ server.on('upgrade',(req,socket,head)=>{
 });
 // Keep otherwise idle WSS connections healthy through Nginx without DB queries.
 const heartbeat=setInterval(()=>{for(const client of wss.clients){
- if(client.readyState===1){try{client.ping();}catch{client.terminate();}}
+ if(client.readyState===1){
+  if(client.isAlive===false){client.terminate();continue;}
+  client.isAlive=false;
+  try{client.ping();}catch{client.terminate();}
+ }
 }},30000);
 heartbeat.unref();
 server.listen(18771,'127.0.0.1',()=>console.log('Janggi friend notifications on 127.0.0.1:18771'));
