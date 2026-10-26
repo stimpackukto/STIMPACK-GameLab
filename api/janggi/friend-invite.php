@@ -38,10 +38,10 @@ try {
    AND ((sender_key=? AND receiver_key=?) OR (sender_key=? AND receiver_key=?))");
   $q->execute([$me,$peer,$peer,$me]);
   if(!(int)$q->fetchColumn())invite_reply(403,['ok'=>false,'error'=>'not_friends']);
-  $q=$db->prepare("SELECT COUNT(*) FROM janggi_friend_presence WHERE account_key=?
-   AND last_seen>=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 24 HOUR)");
-  $q->execute([$peer]);
-  if(!(int)$q->fetchColumn())invite_reply(409,['ok'=>false,'error'=>'friend_offline']);
+  // A stale last_seen row is not an online client.
+  $live=janggi_friend_ws_online_accounts([$peer]);
+  if($live===null)invite_reply(503,['ok'=>false,'error'=>'presence_unavailable']);
+  if(!in_array($peer,$live,true))invite_reply(409,['ok'=>false,'error'=>'friend_offline']);
   // Only an actually live invitation/room may block another invitation.
   $q=$db->prepare("SELECT i.id,i.status FROM janggi_friend_invitations i
    LEFT JOIN janggi_pvp_rooms r ON r.id=i.room_id
