@@ -23,6 +23,7 @@ if(!in_array($action,['online','refresh','offline'],true))
  presence_reply(400,['ok'=>false,'error'=>'action']);
 require_once dirname(__DIR__,2).'/includes/db.php';
 require_once dirname(__DIR__,2).'/includes/janggi_device_session.php';
+require_once __DIR__.'/friend-ws-notify.php';
 try {
  $me=janggi_authenticated_account_key();
  if(!$me)presence_reply(401,['ok'=>false,'error'=>'login_required']);
@@ -48,7 +49,12 @@ try {
  AND p.last_seen >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR)
  ORDER BY p.last_seen DESC LIMIT 100");
  $q->execute([$me,$me,$me,$me]);
- presence_reply(200,['ok'=>true,'friends'=>$q->fetchAll(PDO::FETCH_ASSOC)]);
+ $rows=$q->fetchAll(PDO::FETCH_ASSOC);
+ // Live WebSocket connections determine online status; 24-hour records are not proof.
+ $online=janggi_friend_ws_online_accounts(array_column($rows,'peer'));
+ if($online===null)presence_reply(503,['ok'=>false,'error'=>'live_presence_unavailable']);
+ $active=array_values(array_filter($rows,static fn($row)=>in_array($row['peer'],$online,true)));
+ presence_reply(200,['ok'=>true,'friends'=>$active]);
 } catch(Throwable $e) {
  if(isset($db)&&$db instanceof PDO&&$db->inTransaction())$db->rollBack();
  error_log('janggi_presence_failed');
