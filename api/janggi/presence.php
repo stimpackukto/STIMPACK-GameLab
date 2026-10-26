@@ -40,14 +40,11 @@ try {
    ON DUPLICATE KEY UPDATE last_seen=UTC_TIMESTAMP()");
   $q->execute([$me]);
  }
- $q=$db->prepare("SELECT p.account_key AS peer, UNIX_TIMESTAMP(p.online_since) AS online_since,
+ $q=$db->prepare("SELECT CASE WHEN f.sender_key=? THEN f.receiver_key ELSE f.sender_key END AS peer,
   CASE WHEN f.sender_key=? THEN f.receiver_name ELSE f.sender_name END AS name
  FROM janggi_friend_requests f
- JOIN janggi_friend_presence p ON p.account_key =
-  CASE WHEN f.sender_key=? THEN f.receiver_key ELSE f.sender_key END
  WHERE (f.sender_key=? OR f.receiver_key=?) AND f.status='accepted'
- AND p.last_seen >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR)
- ORDER BY p.last_seen DESC LIMIT 100");
+ ORDER BY f.updated_at DESC LIMIT 100");
  $q->execute([$me,$me,$me,$me]);
  $rows=$q->fetchAll(PDO::FETCH_ASSOC);
  // Live WebSocket connections determine online status; 24-hour records are not proof.
