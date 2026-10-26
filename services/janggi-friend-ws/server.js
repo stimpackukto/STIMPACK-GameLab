@@ -9,11 +9,34 @@ const sign=s=>crypto.createHmac('sha256',secret).update(s).digest('hex');
 const safeEqual=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.length===b.length&&
  crypto.timingSafeEqual(Buffer.from(a),Buffer.from(b));
 const channels=new Map();
+const watchers=new Map();
 const wss=new WebSocketServer({noServer:true,maxPayload:1024,perMessageDeflate:false});
-function attach(account,ws){
+function publishPresence(account,online){
+ for(const watcher of watchers.get(account)||[]){
+  if(watcher.readyState===1)watcher.send(JSON.stringify({type:'friend-presence-changed',peer:account,online}));
+ }
+}
+function attach(account,peers,ws){
+ const wasOnline=(channels.get(account)||new Set()).size>0;
  if(!channels.has(account))channels.set(account,new Set());
  channels.get(account).add(ws);
- ws.on('close',()=>{const set=channels.get(account);if(!set)return;set.delete(ws);if(!set.size)channels.delete(account);});
+ ws.friendPeers=peers;
+ for(const peer of peers){
+  if(!watchers.has(peer))watchers.set(peer,new Set());
+  watchers.get(peer).add(ws);
+ }
+ // Tell this new connection which friends are already online without a separate fetch.
+ ws.send(JSON.stringify({type:'friend-presence-snapshot',
+   online:peers.filter(peer=>(channels.get(peer)||new Set()).size>0)}));
+ if(!wasOnline)publishPresence(account,true);
+ ws.on('close',()=>{
+  for(const peer of peers){
+   const subs=watchers.get(peer);if(!subs)continue;
+   subs.delete(ws);if(!subs.size)watchers.delete(peer);
+  }
+  const set=channels.get(account);if(!set)return;
+  set.delete(ws);if(!set.size){channels.delete(account);publishPresence(account,false);}
+ });
  ws.on('message',()=>ws.close(1008,'read only'));
 }
 const server=http.createServer((req,res)=>{
@@ -53,12 +76,16 @@ server.on('upgrade',(req,socket,head)=>{
   if(url.pathname!=='/ws/janggi-friends'||req.headers.origin!=='https://stimpack.pe.kr')throw Error('origin');
   const ticket=url.searchParams.get('ticket')||'';
   const parts=ticket.split('.');
-  if(parts.length!==4)throw Error('ticket');
-  const [account,expiry,nonce,mac]=parts;
+  if(parts.length!==5)throw Error('ticket');
+  const [account,expiry,nonce,roster,mac]=parts;
   if(!/^[a-f0-9]{64}$/.test(account)||!/^[0-9]{10}$/.test(expiry)||!/^[a-f0-9]{24}$/.test(nonce))throw Error('ticket');
   if(+expiry<Date.now()/1000||+expiry>Date.now()/1000+100)throw Error('expired');
-  if(!safeEqual(mac,sign(account+'.'+expiry+'.'+nonce)))throw Error('signature');
-  wss.handleUpgrade(req,socket,head,ws=>attach(account,ws));
+  if(!/^[A-Za-z0-9_-]{2,9000}$/.test(roster))throw Error('roster');
+  if(!safeEqual(mac,sign(account+'.'+expiry+'.'+nonce+'.'+roster)))throw Error('signature');
+  const peers=JSON.parse(Buffer.from(roster.replace(/-/g,'+').replace(/_/g,'/'),'base64').toString('utf8'));
+  if(!Array.isArray(peers)||peers.length>100||
+    peers.some(peer=>typeof peer!=='string'||!/^[a-f0-9]{64}$/.test(peer)))throw Error('roster');
+  wss.handleUpgrade(req,socket,head,ws=>attach(account,new Set(peers),ws));
  }catch{socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');socket.destroy();}
 });
 // Keep otherwise idle WSS connections healthy through Nginx without DB queries.
