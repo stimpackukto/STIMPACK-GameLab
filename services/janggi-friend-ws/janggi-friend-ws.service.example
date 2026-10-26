@@ -1,0 +1,17 @@
+[Unit]
+Description=STIMPACK Janggi friend invitation notifications
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/gamelab/services/janggi-friend-ws
+EnvironmentFile=/etc/stimpack/janggi-friend-ws.env
+ExecStart=/usr/bin/node /var/www/gamelab/services/janggi-friend-ws/server.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
