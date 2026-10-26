@@ -125,7 +125,11 @@ function janggi_verify_google_token(string $jwt,string $audience,string $expecte
     if(isset($claims['nbf'])&&(!is_numeric($claims['nbf'])||$claims['nbf']>$now+60))return null;
     if(!is_string($claims['nonce']??null)||!hash_equals($expectedNonce,$claims['nonce']))return null;
     if(!is_string($claims['sub']??null)||!preg_match('/^[0-9]{8,32}$/D',$claims['sub']))return null;
-    if(isset($claims['azp'])&&$claims['azp']!==$audience)return null;
+    // Android ID tokens may have an authorized-party (azp) client ID that
+    // differs from the web/backend audience (aud). The signed audience and
+    // one-time nonce are still verified above; do not equate azp with aud.
+    if(isset($claims['azp'])&&(!is_string($claims['azp'])||
+        !preg_match('/^[0-9]+-[A-Za-z0-9_-]+\\.apps\\.googleusercontent\\.com$/D',$claims['azp'])))return null;
     return [
         'sub'=>$claims['sub'],
         'name'=>mb_substr((string)($claims['name']??''),0,120),
