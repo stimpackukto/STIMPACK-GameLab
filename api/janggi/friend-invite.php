@@ -21,6 +21,7 @@ $data=json_decode($raw,true);
 if(!is_array($data))invite_reply(400,['ok'=>false,'error'=>'json']);
 require_once dirname(__DIR__,2).'/includes/db.php';
 require_once dirname(__DIR__,2).'/includes/janggi_device_session.php';
+require_once __DIR__.'/friend-ws-notify.php';
 try {
  $me=janggi_authenticated_account_key();
  if(!$me)invite_reply(401,['ok'=>false,'error'=>'login_required']);
@@ -47,7 +48,9 @@ try {
   if($existing)invite_reply(200,['ok'=>true,'id'=>(int)$existing,'status'=>'pending']);
   $q=$db->prepare("INSERT INTO janggi_friend_invitations(sender_key,receiver_key) VALUES(?,?)");
   $q->execute([$me,$peer]);
-  invite_reply(200,['ok'=>true,'id'=>(int)$db->lastInsertId(),'status'=>'pending']);
+  $newId=(int)$db->lastInsertId();
+  janggi_friend_ws_notify($peer,$newId,'invite');
+  invite_reply(200,['ok'=>true,'id'=>$newId,'status'=>'pending']);
  }
  if($action==='list'){
   $q=$db->prepare("SELECT i.id,i.sender_key,i.receiver_key,i.status,i.room_id,i.created_at,
@@ -85,7 +88,9 @@ try {
    }
    $db->prepare("UPDATE janggi_friend_invitations SET status=? WHERE id=?")
     ->execute([$action==='decline'?'declined':'cancelled',$id]);
-   $db->commit();invite_reply(200,['ok'=>true,'status'=>$action]);
+   $db->commit();
+   janggi_friend_ws_notify($receiver?$inv['sender_key']:$inv['receiver_key'],$id,$action);
+   invite_reply(200,['ok'=>true,'status'=>$action]);
   }
   if($action==='accept'&&$inv['status']==='pending'&&$receiver){
    // A direct invitation creates a private room, not a random-match queue entry.
@@ -129,6 +134,7 @@ try {
   $token=$receiver?$inv['receiver_token']:$inv['sender_token'];
   $side=$receiver?'red':'blue';
   $db->commit();
+  if($action==='accept')janggi_friend_ws_notify($inv['sender_key'],$id,'accept');
   invite_reply(200,['ok'=>true,'status'=>'accepted','session'=>[
    'room'=>$room,'token'=>$token,'side'=>$side]]);
  }
