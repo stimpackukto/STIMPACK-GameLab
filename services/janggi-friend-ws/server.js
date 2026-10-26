@@ -85,7 +85,7 @@ server.on('upgrade',(req,socket,head)=>{
   const peers=JSON.parse(Buffer.from(roster.replace(/-/g,'+').replace(/_/g,'/'),'base64').toString('utf8'));
   if(!Array.isArray(peers)||peers.length>100||
     peers.some(peer=>typeof peer!=='string'||!/^[a-f0-9]{64}$/.test(peer)))throw Error('roster');
-  wss.handleUpgrade(req,socket,head,ws=>attach(account,new Set(peers),ws));
+  wss.handleUpgrade(req,socket,head,ws=>attach(account,[...new Set(peers)],ws));
  }catch{socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');socket.destroy();}
 });
 // Keep otherwise idle WSS connections healthy through Nginx without DB queries.
