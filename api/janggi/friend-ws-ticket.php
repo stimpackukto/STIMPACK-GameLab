@@ -12,8 +12,20 @@ if(strlen($secret)<32){http_response_code(503);exit('{"ok":false,"error":"ws_not
 require_once dirname(__DIR__,2).'/includes/janggi_device_session.php';
 try{$account=janggi_authenticated_account_key();}catch(Throwable $e){$account=null;}
 if(!$account){http_response_code(401);exit('{"ok":false,"error":"login_required"}');}
+// Include only accepted friends in the signed ticket; Node verifies the roster.
+require_once dirname(__DIR__,2).'/includes/db.php';
+try {
+ $db=gamelab_db();
+ $q=$db->prepare("SELECT CASE WHEN sender_key=? THEN receiver_key ELSE sender_key END AS peer
+  FROM janggi_friend_requests WHERE status='accepted' AND (sender_key=? OR receiver_key=?)
+  LIMIT 100");
+ $q->execute([$account,$account,$account]);
+ $peers=array_values(array_unique(array_filter($q->fetchAll(PDO::FETCH_COLUMN),static fn($v)=>
+  is_string($v)&&preg_match('/^[a-f0-9]{64}$/D',$v))));
+}catch(Throwable $e){http_response_code(503);exit('{"ok":false,"error":"friends_unavailable"}');}
+$roster=rtrim(strtr(base64_encode(json_encode($peers)),'+/','-_'),'=');
 $exp=time()+90;
 $nonce=bin2hex(random_bytes(12));
-$payload="$account.$exp.$nonce";
+$payload="$account.$exp.$nonce.$roster";
 $signature=hash_hmac('sha256',$payload,$secret);
 echo json_encode(['ok'=>true,'ticket'=>$payload.'.'.$signature,'expiresIn'=>90],JSON_UNESCAPED_SLASHES);
