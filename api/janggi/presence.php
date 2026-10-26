@@ -44,7 +44,7 @@ try {
   CASE WHEN f.sender_key=? THEN f.receiver_name ELSE f.sender_name END AS name
  FROM janggi_friend_requests f
  WHERE (f.sender_key=? OR f.receiver_key=?) AND f.status='accepted'
- ORDER BY f.updated_at DESC LIMIT 100");
+ LIMIT 100");
  $q->execute([$me,$me,$me,$me]);
  $rows=$q->fetchAll(PDO::FETCH_ASSOC);
  // Live WebSocket connections determine online status; 24-hour records are not proof.
