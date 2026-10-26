@@ -34,7 +34,7 @@ try {
   }
   respond(200,['ok'=>true,'items'=>$items]);
  }
- if($action==='request'){
+ if($action==='request'||$action==='status'){
   $room=(int)($data['room']??0);
   $token=(string)($data['token']??'');
   if($room<1||!preg_match('/^[a-f0-9]{48}$/D',$token))respond(400,['ok'=>false,'error'=>'room']);
@@ -47,9 +47,19 @@ try {
   $peer=$opponent['account_key']??null;
   if(!is_string($peer)||!preg_match('/^[a-f0-9]{64}$/D',$peer)||hash_equals($me,$peer))
    respond(409,['ok'=>false,'error'=>'opponent_not_linked']);
-  $check=$db->prepare("SELECT id,sender_key,status FROM janggi_friend_requests
+  $check=$db->prepare("SELECT id,sender_key,status,updated_at FROM janggi_friend_requests
     WHERE (sender_key=? AND receiver_key=?) OR (sender_key=? AND receiver_key=?) LIMIT 1");
   $check->execute([$me,$peer,$peer,$me]);$existing=$check->fetch(PDO::FETCH_ASSOC);
+  if($action==='status'){
+   if(!$existing||!in_array($existing['status'],['pending','accepted'],true))
+    respond(200,['ok'=>true,'status'=>'none','id'=>null]);
+   $status=$existing['status']==='accepted'?'accepted':
+     (hash_equals($me,$existing['sender_key'])?'outgoing':'incoming');
+   respond(200,['ok'=>true,'status'=>$status,'id'=>(int)$existing['id']]);
+  }
+  if($existing&&$existing['status']==='declined'&&
+     strtotime((string)$existing['updated_at'])>time()-86400)
+    respond(429,['ok'=>false,'error'=>'request_cooldown']);
   if($existing){
    if($existing['status']==='accepted')respond(200,['ok'=>true,'status'=>'accepted']);
    if($existing['status']==='pending')respond(200,['ok'=>true,'status'=>'pending']);
