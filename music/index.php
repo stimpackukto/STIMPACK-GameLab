@@ -144,6 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Use a bounded process and never build an unescaped shell command from user input.
             $ffmpeg = '/usr/bin/ffmpeg';
             if (!is_executable($ffmpeg) || !function_exists('proc_open')) {
+                if ($cover !== '') @unlink($audioDir . '/' . $cover);
                 throw new RuntimeException('서버에 FFmpeg 변환 기능이 없습니다. 관리자에게 문의해 주세요.');
             }
             $filename = $id . '.ogg';
@@ -164,6 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $exitCode = proc_close($process);
             if ($exitCode !== 0 || !is_file($dest) || filesize($dest) === 0) {
                 @unlink($dest);
+                if ($cover !== '') @unlink($audioDir . '/' . $cover);
                 error_log('[music convert] ' . (string)$stderr);
                 throw new RuntimeException('음원 압축에 실패했습니다. 파일 형식 또는 FFmpeg 설정을 확인해 주세요.');
             }
