@@ -12,7 +12,7 @@ $audioDir = $root . '/uploads';
 $dataDir = $root . '/data';
 $indexFile = $dataDir . '/tracks.php';
 $prefix = "<?php http_response_code(404); exit; ?>\n";
-$maxBytes = 20 * 1024 * 1024;
+$maxBytes = 5 * 1024 * 1024;
 $email = gamelab_login_email();
 $admin = gamelab_is_admin();
 $messages = [];
@@ -59,9 +59,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($artist === '') $artist = explode('@', $email)[0];
             if (empty($_POST['rights'])) throw new RuntimeException('직접 제작했거나 공개 권한이 있는 음악만 등록할 수 있습니다.');
             $f = $_FILES['audio'] ?? null;
-            if (!is_array($f) || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) throw new RuntimeException('음원 업로드에 실패했습니다.');
+            if (!is_array($f)) throw new RuntimeException('음원 파일을 선택해 주세요.');
+            $uploadError = (int)($f['error'] ?? UPLOAD_ERR_NO_FILE);
+            if ($uploadError === UPLOAD_ERR_INI_SIZE || $uploadError === UPLOAD_ERR_FORM_SIZE) throw new RuntimeException('PHP 업로드 허용 크기를 초과했습니다. music/.user.ini 설정을 확인해 주세요.');
+            if ($uploadError !== UPLOAD_ERR_OK) throw new RuntimeException('음원 업로드에 실패했습니다. 오류 코드: ' . $uploadError);
             $size = (int)($f['size'] ?? 0);
-            if ($size < 1 || $size > $maxBytes || !is_uploaded_file((string)$f['tmp_name'])) throw new RuntimeException('음원 크기는 20MB 이하여야 합니다.');
+            if ($size < 1 || $size > $maxBytes || !is_uploaded_file((string)$f['tmp_name'])) throw new RuntimeException('음원 크기는 5MB 이하여야 합니다.');
             $mime = (new finfo(FILEINFO_MIME_TYPE))->file((string)$f['tmp_name']);
             $ext = match ($mime) {
                 'audio/mpeg', 'audio/mp3' => 'mp3',
@@ -74,9 +77,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($ext === null) throw new RuntimeException('MP3, OGG, WAV, M4A, WebM 음원만 등록할 수 있습니다.');
             if (!is_dir($audioDir) && !@mkdir($audioDir, 0755, true) && !is_dir($audioDir)) throw new RuntimeException('음원 저장 디렉터리를 만들 수 없습니다.');
             $id = bin2hex(random_bytes(16));
-            $filename = $id . '.' . $ext;
-            if (!move_uploaded_file((string)$f['tmp_name'], $audioDir . '/' . $filename)) throw new RuntimeException('음원 저장에 실패했습니다. 서버 쓰기 권한을 확인해 주세요.');
-            @chmod($audioDir . '/' . $filename, 0644);
+            // All uploads are transcoded to efficient OGG/Opus; source is not stored.
+            // Use a bounded process and never build an unescaped shell command from user input.
+            $ffmpeg = '/usr/bin/ffmpeg';
+            if (!is_executable($ffmpeg) || !function_exists('proc_open')) {
+                throw new RuntimeException('서버에 FFmpeg 변환 기능이 없습니다. 관리자에게 문의해 주세요.');
+            }
+            $filename = $id . '.ogg';
+            $dest = $audioDir . '/' . $filename;
+            $command = [
+                $ffmpeg, '-nostdin', '-hide_banner', '-loglevel', 'error', '-y',
+                '-i', (string)$f['tmp_name'], '-map', '0:a:0', '-vn',
+                '-c:a', 'libopus', '-b:a', '96k', '-vbr', 'on',
+                '-f', 'ogg', $dest
+            ];
+            $pipes = [];
+            $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+            if (!is_resource($process)) throw new RuntimeException('음원 압축을 시작할 수 없습니다.');
+            fclose($pipes[0]);
+            fclose($pipes[1]);
+            $stderr = stream_get_contents($pipes[2], 2048);
+            fclose($pipes[2]);
+            $exitCode = proc_close($process);
+            if ($exitCode !== 0 || !is_file($dest) || filesize($dest) === 0) {
+                @unlink($dest);
+                error_log('[music convert] ' . (string)$stderr);
+                throw new RuntimeException('음원 압축에 실패했습니다. 파일 형식 또는 FFmpeg 설정을 확인해 주세요.');
+            }
+            @chmod($dest, 0644);
             try {
                 music_mutate($dataDir, $indexFile, $prefix, function (&$tracks) use ($id, $filename, $title, $artist, $description, $email): void {
                     array_unshift($tracks, [
@@ -128,7 +156,7 @@ require dirname(__DIR__) . '/includes/header.php';
         <label>제목 <input name="title" maxlength="100" required style="display:block;width:100%;padding:10px;margin:7px 0 14px"></label>
         <label>제작자 <input name="artist" maxlength="80" placeholder="비우면 로그인 계정 이름 사용" style="display:block;width:100%;padding:10px;margin:7px 0 14px"></label>
         <label>소개 <textarea name="description" maxlength="500" rows="3" style="display:block;width:100%;padding:10px;margin:7px 0 14px"></textarea></label>
-        <label>음악 파일 (MP3, OGG, WAV, M4A, WebM / 20MB 이하)
+        <label>음악 파일 (MP3, OGG, WAV, M4A, WebM / 5MB 이하 · OGG로 압축 저장)
           <input type="file" name="audio" accept=".mp3,.ogg,.wav,.m4a,.webm,audio/*" required style="display:block;margin:10px 0 16px">
         </label>
         <label style="display:block;margin-bottom:16px"><input type="checkbox" name="rights" value="1" required> 직접 제작했거나 공개·공유 권한이 있는 음원임을 확인합니다.</label>
