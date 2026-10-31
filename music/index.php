@@ -138,9 +138,18 @@ $tracks = music_read($indexFile, $prefix);
 $pageTitle = '음악';
 require dirname(__DIR__) . '/includes/header.php';
 ?>
-<main class="container" style="max-width:1000px; padding:38px 16px 72px; min-height:65vh;">
-  <h1 style="margin:0 0 8px">음악</h1>
-  <p style="opacity:.75">직접 만든 음악을 공유하고 자유롭게 감상하는 공간입니다. 듣기는 로그인 없이 가능합니다.</p>
+<section class="subhero">
+  <div class="container">
+    <p class="section-kicker">MUSIC</p>
+    <h1>STIMPACK GAME LAB 음악</h1>
+    <p>직접 만든 음악을 공유하고 자유롭게 감상하는 공간입니다. 듣기는 로그인 없이 가능합니다.</p>
+    <?php if ($email === ''): ?>
+      <a class="button secondary" href="/auth/google_login.php" style="margin-top:18px">Google 로그인</a>
+    <?php endif; ?>
+  </div>
+</section>
+<main class="section">
+<div class="container" style="max-width:1000px;min-height:50vh">
   <?php foreach ($messages as $m): ?><p role="status" style="color:#9be3ae"><?= music_h($m) ?></p><?php endforeach; ?>
   <?php if ($error): ?><p role="alert" style="color:#ffaaa7"><?= music_h($error) ?></p><?php endif; ?>
   <?php if ($email !== ''): ?>
@@ -159,8 +168,6 @@ require dirname(__DIR__) . '/includes/header.php';
         <button type="submit" style="padding:10px 22px;cursor:pointer">음악 등록</button>
       </form>
     </section>
-  <?php else: ?>
-    <p><a href="/auth/google_login.php">구글 로그인 후 내 음악 등록하기</a></p>
   <?php endif; ?>
   <h2 style="margin-top:36px">공개 음악 <small style="opacity:.6">(<?= count($tracks) ?>곡)</small></h2>
   <?php if (!$tracks): ?><p style="opacity:.7">아직 등록된 음악이 없습니다.</p><?php endif; ?>
@@ -185,6 +192,7 @@ require dirname(__DIR__) . '/includes/header.php';
     </article>
   <?php endforeach; ?>
   </div>
+</div>
 </main>
 <?php
 $footer = dirname(__DIR__) . '/includes/footer.php';
