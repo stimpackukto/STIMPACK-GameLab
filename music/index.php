@@ -296,7 +296,7 @@ require dirname(__DIR__) . '/includes/header.php';
 .music-description{margin:14px 0 0;color:#d7e4ee;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
 .music-player-wrap{margin-top:18px;padding:12px;border:1px solid rgba(150,190,220,.17);background:rgba(255,255,255,.04);border-radius:14px}
 .music-player{display:block;width:100%}
-.music-edit-panel{margin-top:18px}.music-edit-panel summary{display:inline-flex;cursor:pointer;list-style:none}.music-edit-panel summary::-webkit-details-marker{display:none}.music-edit-form{margin-top:12px;display:grid;gap:12px;max-width:560px}.music-edit-form label{display:grid;gap:6px;color:#d2e1ec;font-size:14px}.music-edit-form input,.music-edit-form textarea{width:100%;box-sizing:border-box;background:#071c2e;border:1px solid #486b82;border-radius:8px;color:#fff;padding:10px;font:inherit}.music-edit-form button{justify-self:start}
+.music-manage-actions{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-top:14px}.music-manage-actions .music-actions{margin-top:0}.music-edit-panel{margin-top:0}.music-edit-panel[open]{flex-basis:100%;order:3}.music-edit-panel summary{display:inline-flex;cursor:pointer;list-style:none}.music-edit-panel summary::-webkit-details-marker{display:none}.music-edit-form{margin-top:12px;display:grid;gap:12px;max-width:560px}.music-edit-form label{display:grid;gap:6px;color:#d2e1ec;font-size:14px}.music-edit-form input,.music-edit-form textarea{width:100%;box-sizing:border-box;background:#071c2e;border:1px solid #486b82;border-radius:8px;color:#fff;padding:10px;font:inherit}.music-edit-form button{justify-self:start}
 .music-actions{margin-top:14px}
 .music-cover-form{margin-top:16px;display:flex;gap:10px;align-items:end;flex-wrap:wrap;font-size:13px;color:#b1c5d6}.music-cover-form input{display:block;margin-top:6px;max-width:240px}
 .music-empty{color:#a8bacb}
@@ -412,6 +412,20 @@ require dirname(__DIR__) . '/includes/header.php';
           <?php endif; ?>
         </section>
         <?php if ($email !== '' && ($admin || strcasecmp($email, (string)($track['owner'] ?? '')) === 0)): ?>
+          <form method="post" enctype="multipart/form-data" class="music-cover-form">
+            <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
+            <input type="hidden" name="action" value="cover">
+            <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
+            <label>프로필 사진 변경 (원본 5MB 이하 · 자동 압축)<input type="file" name="cover" accept="image/jpeg,image/png,image/webp" required></label>
+            <button type="submit" class="button secondary">사진 저장</button>
+          </form>
+          <div class="music-manage-actions">
+          <form method="post" class="music-actions" onsubmit="return confirm('이 음악을 삭제할까요?')">
+            <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
+            <button type="submit" class="button secondary">삭제</button>
+          </form>
           <details class="music-edit-panel">
             <summary class="button secondary">수정</summary>
             <form method="post" class="music-edit-form">
@@ -424,19 +438,7 @@ require dirname(__DIR__) . '/includes/header.php';
               <button type="submit" class="button primary">수정 저장</button>
             </form>
           </details>
-          <form method="post" enctype="multipart/form-data" class="music-cover-form">
-            <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
-            <input type="hidden" name="action" value="cover">
-            <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
-            <label>프로필 사진 변경 (원본 5MB 이하 · 자동 압축)<input type="file" name="cover" accept="image/jpeg,image/png,image/webp" required></label>
-            <button type="submit" class="button secondary">사진 저장</button>
-          </form>
-          <form method="post" class="music-actions" onsubmit="return confirm('이 음악을 삭제할까요?')">
-            <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
-            <input type="hidden" name="action" value="delete">
-            <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
-            <button type="submit" class="button secondary">삭제</button>
-          </form>
+          </div>
         <?php endif; ?>
       </div>
     </article>
