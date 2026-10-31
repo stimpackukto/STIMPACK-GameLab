@@ -28,6 +28,21 @@ function music_read(string $file, string $prefix): array {
     $v = json_decode(substr($s, strlen($prefix)), true);
     return is_array($v) ? $v : [];
 }
+function music_save_cover(array $file, string $dir, string $id): string {
+    $error = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($error === UPLOAD_ERR_NO_FILE) return '';
+    if ($error !== UPLOAD_ERR_OK) throw new RuntimeException('사진 업로드 오류: ' . $error);
+    $tmp = (string)($file['tmp_name'] ?? '');
+    if ((int)($file['size'] ?? 0) < 1 || (int)($file['size'] ?? 0) > 2097152 || !is_uploaded_file($tmp)) throw new RuntimeException('사진은 2MB 이하만 가능합니다.');
+    $meta = @getimagesize($tmp);
+    $ext = is_array($meta) ? ([IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_WEBP => 'webp'][$meta[2]] ?? '') : '';
+    if ($ext === '' || $meta[0] > 4096 || $meta[1] > 4096) throw new RuntimeException('JPG, PNG, WebP 사진만 지원합니다.');
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) throw new RuntimeException('사진 저장 폴더에 접근할 수 없습니다.');
+    $filename = $id . '-cover-' . bin2hex(random_bytes(6)) . '.' . $ext;
+    if (!move_uploaded_file($tmp, $dir . '/' . $filename)) throw new RuntimeException('사진을 저장하지 못했습니다.');
+    @chmod($dir . '/' . $filename, 0644);
+    return $filename;
+}
 function music_mutate(string $dir, string $file, string $prefix, callable $fn): void {
     if (!is_dir($dir) && !@mkdir($dir, 0750, true) && !is_dir($dir)) throw new RuntimeException('저장 디렉터리를 만들 수 없습니다.');
     $lock = @fopen($dir . '/.music.lock', 'c');
@@ -71,6 +86,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([bin2hex(random_bytes(12)), $trackId, $body, $writer, $email]);
             header('Location: /music/#music-' . $trackId, true, 303);
             exit;
+        } elseif ($action === 'cover') {
+            $id = (string)($_POST['id'] ?? '');
+            if (!preg_match('/^[a-f0-9]{32}$/', $id)) throw new RuntimeException('잘못된 음악입니다.');
+            $canEdit = false;
+            foreach (music_read($indexFile, $prefix) as $track) {
+                if (($track['id'] ?? '') !== $id) continue;
+                if (!$admin && strcasecmp((string)($track['owner'] ?? ''), $email) !== 0) throw new RuntimeException('본인 음악만 수정할 수 있습니다.');
+                $canEdit = true; break;
+            }
+            if (!$canEdit) throw new RuntimeException('음악을 찾을 수 없습니다.');
+            $cover = music_save_cover((array)($_FILES['cover'] ?? []), $audioDir, $id);
+            if ($cover === '') throw new RuntimeException('사진을 선택해 주세요.');
+            $previous = '';
+            try {
+                music_mutate($dataDir, $indexFile, $prefix, function (&$tracks) use ($id, $email, $admin, $cover, &$previous): void {
+                    foreach ($tracks as &$track) {
+                        if (($track['id'] ?? '') !== $id) continue;
+                        if (!$admin && strcasecmp((string)($track['owner'] ?? ''), $email) !== 0) throw new RuntimeException('수정 권한이 없습니다.');
+                        $previous = (string)($track['cover'] ?? '');
+                        $track['cover'] = $cover;
+                        return;
+                    }
+                    throw new RuntimeException('음악을 찾을 수 없습니다.');
+                });
+            } catch (Throwable $e) {
+                @unlink($audioDir . '/' . $cover);
+                throw $e;
+            }
+            if (preg_match('/^[a-f0-9]{32}-cover-[a-f0-9]{12}\.(jpg|png|webp)$/', $previous)) @unlink($audioDir . '/' . $previous);
+            header('Location: /music/#music-' . $id, true, 303);
+            exit;
         } elseif ($action === 'upload') {
             $title = trim((string)($_POST['title'] ?? ''));
             $artist = trim((string)($_POST['artist'] ?? ''));
@@ -93,6 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if (!is_dir($audioDir) && !@mkdir($audioDir, 0755, true) && !is_dir($audioDir)) throw new RuntimeException('음원 저장 디렉터리를 만들 수 없습니다.');
             $id = bin2hex(random_bytes(16));
+            $cover = music_save_cover((array)($_FILES['cover'] ?? []), $audioDir, $id);
             // All uploads are transcoded to efficient OGG/Opus; source is not stored.
             // Use a bounded process and never build an unescaped shell command from user input.
             $ffmpeg = '/usr/bin/ffmpeg';
@@ -122,31 +169,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             @chmod($dest, 0644);
             try {
-                music_mutate($dataDir, $indexFile, $prefix, function (&$tracks) use ($id, $filename, $title, $artist, $description, $email): void {
+                music_mutate($dataDir, $indexFile, $prefix, function (&$tracks) use ($id, $filename, $title, $artist, $description, $email, $cover): void {
                     array_unshift($tracks, [
                         'id' => $id, 'file' => $filename, 'title' => $title, 'artist' => $artist,
-                        'description' => $description, 'owner' => $email, 'created' => gmdate('c')
+                        'description' => $description, 'owner' => $email, 'created' => gmdate('c'), 'cover' => $cover
                     ]);
                 });
             } catch (Throwable $e) {
                 @unlink($audioDir . '/' . $filename);
+                if ($cover !== '') @unlink($audioDir . '/' . $cover);
                 throw $e;
             }
             $messages[] = '음악이 등록되었습니다.';
         } elseif ($action === 'delete') {
             $id = (string)($_POST['id'] ?? '');
             $removed = null;
-            music_mutate($dataDir, $indexFile, $prefix, function (&$tracks) use ($id, $email, $admin, &$removed): void {
+            $removedCover = '';
+            music_mutate($dataDir, $indexFile, $prefix, function (&$tracks) use ($id, $email, $admin, &$removed, &$removedCover): void {
                 foreach ($tracks as $i => $track) {
                     if (($track['id'] ?? '') !== $id) continue;
                     if (!$admin && strcasecmp((string)($track['owner'] ?? ''), $email) !== 0) throw new RuntimeException('본인 음악만 삭제할 수 있습니다.');
                     $removed = (string)$track['file'];
+                    $removedCover = (string)($track['cover'] ?? '');
                     array_splice($tracks, $i, 1);
                     return;
                 }
                 throw new RuntimeException('음악을 찾을 수 없습니다.');
             });
             if ($removed && preg_match('/^[a-f0-9]{32}\.(mp3|ogg|wav|m4a|webm)$/', $removed)) @unlink($audioDir . '/' . $removed);
+            if (preg_match('/^[a-f0-9]{32}-cover-[a-f0-9]{12}\\.(jpg|png|webp)$/', $removedCover)) @unlink($audioDir . '/' . $removedCover);
             $messages[] = '음악을 삭제했습니다.';
         } else throw new RuntimeException('잘못된 요청입니다.');
     } catch (Throwable $e) {
@@ -177,6 +228,7 @@ require dirname(__DIR__) . '/includes/header.php';
 .music-list{display:grid;gap:18px}
 .music-card{display:grid;grid-template-columns:120px minmax(0,1fr);gap:20px;padding:22px;border:1px solid rgba(86,122,148,.55);border-radius:18px;background:linear-gradient(160deg,#102a40,#071a2a);box-shadow:0 10px 24px rgba(0,0,0,.16)}
 .music-thumb{width:120px;height:120px;display:flex;align-items:center;justify-content:center;border-radius:15px;background:radial-gradient(circle at 30% 30%,rgba(77,187,255,.33),transparent 50%),linear-gradient(135deg,#144967,#0a2135);border:1px solid rgba(98,189,248,.25);color:#b9e8ff;font-size:52px}
+.music-thumb img{width:100%;height:100%;object-fit:cover;border-radius:14px}
 .music-body{min-width:0}
 .music-title{font-size:25px;margin:2px 0 8px;color:#fff;overflow-wrap:anywhere}
 .music-meta{display:flex;flex-wrap:wrap;gap:10px;color:#b1c5d6;font-size:14px}
@@ -186,6 +238,7 @@ require dirname(__DIR__) . '/includes/header.php';
 .music-player-wrap{margin-top:18px;padding:12px;border:1px solid rgba(150,190,220,.17);background:rgba(255,255,255,.04);border-radius:14px}
 .music-player{display:block;width:100%}
 .music-actions{margin-top:14px}
+.music-cover-form{margin-top:16px;display:flex;gap:10px;align-items:end;flex-wrap:wrap;font-size:13px;color:#b1c5d6}.music-cover-form input{display:block;margin-top:6px;max-width:240px}
 .music-empty{color:#a8bacb}
 .music-comments{margin-top:22px;padding-top:16px;border-top:1px solid rgba(140,178,202,.22)}
 .music-comments h4{margin:0 0 14px;font-size:16px;color:#d6e8f5}
@@ -226,6 +279,9 @@ require dirname(__DIR__) . '/includes/header.php';
         <label>음악 파일 (MP3, OGG, WAV, M4A, WebM / 원본 10MB 이하 · OGG로 압축 저장)
           <input type="file" name="audio" accept=".mp3,.ogg,.wav,.m4a,.webm,audio/*" required style="display:block;margin:10px 0 16px">
         </label>
+        <label>프로필 사진 (선택 / JPG, PNG, WebP / 2MB 이하)
+          <input type="file" name="cover" accept="image/jpeg,image/png,image/webp" style="display:block;margin:10px 0 16px">
+        </label>
         <label style="display:block;margin-bottom:16px"><input type="checkbox" name="rights" value="1" required> 직접 제작했거나 공개·공유 권한이 있는 음원임을 확인합니다.</label>
         <button type="submit" style="padding:10px 22px;cursor:pointer">음악 등록</button>
       </form>
@@ -244,7 +300,12 @@ require dirname(__DIR__) . '/includes/header.php';
     $ext = strtoupper((string)pathinfo($file, PATHINFO_EXTENSION));
   ?>
     <article class="music-card" id="music-<?= music_h((string)$track['id']) ?>">
-      <div class="music-thumb" aria-hidden="true">♪</div>
+      <div class="music-thumb">
+        <?php $coverImage = (string)($track['cover'] ?? ''); ?>
+        <?php if (preg_match('/^[a-f0-9]{32}-cover-[a-f0-9]{12}\\.(jpg|png|webp)$/', $coverImage)): ?>
+          <img src="<?= music_h('/music/uploads/' . $coverImage) ?>" alt="<?= music_h($artist) ?> 프로필 사진" loading="lazy">
+        <?php else: ?><span aria-hidden="true">♪</span><?php endif; ?>
+      </div>
       <div class="music-body">
         <h3 class="music-title"><?= music_h($title) ?></h3>
         <div class="music-meta">
@@ -287,6 +348,13 @@ require dirname(__DIR__) . '/includes/header.php';
           <?php endif; ?>
         </section>
         <?php if ($email !== '' && ($admin || strcasecmp($email, (string)($track['owner'] ?? '')) === 0)): ?>
+          <form method="post" enctype="multipart/form-data" class="music-cover-form">
+            <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
+            <input type="hidden" name="action" value="cover">
+            <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
+            <label>프로필 사진 변경 (2MB 이하)<input type="file" name="cover" accept="image/jpeg,image/png,image/webp" required></label>
+            <button type="submit" class="button secondary">사진 저장</button>
+          </form>
           <form method="post" class="music-actions" onsubmit="return confirm('이 음악을 삭제할까요?')">
             <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
             <input type="hidden" name="action" value="delete">
