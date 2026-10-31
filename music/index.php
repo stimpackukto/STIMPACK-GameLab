@@ -33,14 +33,46 @@ function music_save_cover(array $file, string $dir, string $id): string {
     if ($error === UPLOAD_ERR_NO_FILE) return '';
     if ($error !== UPLOAD_ERR_OK) throw new RuntimeException('사진 업로드 오류: ' . $error);
     $tmp = (string)($file['tmp_name'] ?? '');
-    if ((int)($file['size'] ?? 0) < 1 || (int)($file['size'] ?? 0) > 2097152 || !is_uploaded_file($tmp)) throw new RuntimeException('사진은 2MB 이하만 가능합니다.');
+    $size = (int)($file['size'] ?? 0);
+    if ($size < 1 || $size > 5 * 1024 * 1024 || !is_uploaded_file($tmp)) throw new RuntimeException('사진 원본은 5MB 이하로 선택해 주세요.');
     $meta = @getimagesize($tmp);
-    $ext = is_array($meta) ? ([IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_WEBP => 'webp'][$meta[2]] ?? '') : '';
-    if ($ext === '' || $meta[0] > 4096 || $meta[1] > 4096) throw new RuntimeException('JPG, PNG, WebP 사진만 지원합니다.');
-    if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) throw new RuntimeException('사진 저장 폴더에 접근할 수 없습니다.');
-    $filename = $id . '-cover-' . bin2hex(random_bytes(6)) . '.' . $ext;
-    if (!move_uploaded_file($tmp, $dir . '/' . $filename)) throw new RuntimeException('사진을 저장하지 못했습니다.');
-    @chmod($dir . '/' . $filename, 0644);
+    if (!is_array($meta) || !in_array((int)$meta[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)
+        || $meta[0] < 1 || $meta[1] < 1 || $meta[0] > 4096 || $meta[1] > 4096) {
+        throw new RuntimeException('JPG, PNG, WebP 사진(최대 4096px)만 지원합니다.');
+    }
+    if (!function_exists('imagewebp') || !function_exists('imagecreatetruecolor')) throw new RuntimeException('서버 PHP GD WebP 기능이 필요합니다.');
+    $src = match ((int)$meta[2]) {
+        IMAGETYPE_JPEG => @imagecreatefromjpeg($tmp),
+        IMAGETYPE_PNG => @imagecreatefrompng($tmp),
+        IMAGETYPE_WEBP => @imagecreatefromwebp($tmp),
+    };
+    if (!$src) throw new RuntimeException('사진을 읽을 수 없습니다.');
+    $dst = imagecreatetruecolor(256, 256);
+    if (!$dst) { imagedestroy($src); throw new RuntimeException('사진 변환에 실패했습니다.'); }
+    // Keep square artwork without stretching; crop evenly around the center.
+    $side = min((int)$meta[0], (int)$meta[1]);
+    $left = intdiv((int)$meta[0] - $side, 2);
+    $top = intdiv((int)$meta[1] - $side, 2);
+    imagealphablending($dst, false);
+    imagesavealpha($dst, true);
+    $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+    imagefill($dst, 0, 0, $transparent);
+    $ok = imagecopyresampled($dst, $src, 0, 0, $left, $top, 256, 256, $side, $side);
+    imagedestroy($src);
+    if (!$ok) { imagedestroy($dst); throw new RuntimeException('사진 크기 조정에 실패했습니다.'); }
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+        imagedestroy($dst);
+        throw new RuntimeException('사진 저장 폴더에 접근할 수 없습니다.');
+    }
+    $filename = $id . '-cover-' . bin2hex(random_bytes(6)) . '.webp';
+    $destination = $dir . '/' . $filename;
+    $saved = @imagewebp($dst, $destination, 80);
+    imagedestroy($dst);
+    if (!$saved || !is_file($destination) || filesize($destination) === 0) {
+        @unlink($destination);
+        throw new RuntimeException('WebP 사진 저장에 실패했습니다.');
+    }
+    @chmod($destination, 0644);
     return $filename;
 }
 function music_mutate(string $dir, string $file, string $prefix, callable $fn): void {
@@ -281,7 +313,7 @@ require dirname(__DIR__) . '/includes/header.php';
         <label>음악 파일 (MP3, OGG, WAV, M4A, WebM / 원본 10MB 이하 · OGG로 압축 저장)
           <input type="file" name="audio" accept=".mp3,.ogg,.wav,.m4a,.webm,audio/*" required style="display:block;margin:10px 0 16px">
         </label>
-        <label>프로필 사진 (선택 / JPG, PNG, WebP / 2MB 이하)
+        <label>프로필 사진 (선택 / JPG, PNG, WebP 원본 5MB 이하 · 256×256 WebP 자동 압축)
           <input type="file" name="cover" accept="image/jpeg,image/png,image/webp" style="display:block;margin:10px 0 16px">
         </label>
         <label style="display:block;margin-bottom:16px"><input type="checkbox" name="rights" value="1" required> 직접 제작했거나 공개·공유 권한이 있는 음원임을 확인합니다.</label>
@@ -354,7 +386,7 @@ require dirname(__DIR__) . '/includes/header.php';
             <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
             <input type="hidden" name="action" value="cover">
             <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
-            <label>프로필 사진 변경 (2MB 이하)<input type="file" name="cover" accept="image/jpeg,image/png,image/webp" required></label>
+            <label>프로필 사진 변경 (원본 5MB 이하 · 자동 압축)<input type="file" name="cover" accept="image/jpeg,image/png,image/webp" required></label>
             <button type="submit" class="button secondary">사진 저장</button>
           </form>
           <form method="post" class="music-actions" onsubmit="return confirm('이 음악을 삭제할까요?')">
