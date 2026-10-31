@@ -28,6 +28,9 @@ require dirname(__DIR__) . '/includes/header.php';
   <p class="section-kicker">UTILITIES</p>
   <h1>STIMPACK GAME LAB 도구</h1>
   <p>직접 개발하고 테스트하는 브라우저 확장 기능과 유틸리티를 소개합니다.</p>
+  <?php if (!$isGameLabAdmin && gamelab_login_email() === ''): ?>
+   <a class="button secondary" href="/auth/google_login.php" style="margin-top:18px">Google 로그인</a>
+  <?php endif; ?>
   <?php if ($isGameLabAdmin): ?>
    <div class="app-admin-tools">
     <span class="admin-login-badge">✓ 관리자 로그인</span>
