@@ -311,6 +311,7 @@ require dirname(__DIR__) . '/includes/header.php';
 .music-thumb img{width:100%;height:100%;object-fit:cover;border-radius:14px}
 .music-body{min-width:0}
 .music-title{font-size:25px;margin:2px 0 8px;color:#fff;overflow-wrap:anywhere}
+.music-title-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}.music-title-row .music-title{margin:0}.music-title-row .music-badges{margin:0}
 .music-meta{display:flex;flex-wrap:wrap;gap:10px;color:#b1c5d6;font-size:14px}
 .music-badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .music-badge{padding:5px 11px;border-radius:20px;background:rgba(41,93,129,.33);border:1px solid rgba(98,189,248,.23);font-size:12px;color:#9ddaff}
@@ -406,15 +407,17 @@ require dirname(__DIR__) . '/includes/header.php';
         <?php else: ?><span aria-hidden="true">♪</span><?php endif; ?>
       </div>
       <div class="music-body">
-        <h3 class="music-title"><?= music_h($title) ?></h3>
+        <div class="music-title-row">
+          <h3 class="music-title"><?= music_h($title) ?></h3>
+          <div class="music-badges">
+            <span class="music-badge">공개 음악</span>
+            <span class="music-badge"><?= music_h($ext) ?></span>
+          </div>
+        </div>
         <div class="music-meta">
           <span>제작자 <?= music_h($artist) ?></span>
           <span aria-hidden="true">·</span>
           <span><?= music_h($created) ?></span>
-        </div>
-        <div class="music-badges">
-          <span class="music-badge">공개 음악</span>
-          <span class="music-badge"><?= music_h($ext) ?></span>
         </div>
         <?php if ($description !== ''): ?>
           <p class="music-description"><?= music_h($description) ?></p>
