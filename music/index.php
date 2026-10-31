@@ -118,6 +118,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([bin2hex(random_bytes(12)), $trackId, $body, $writer, $email]);
             header('Location: /music/#music-' . $trackId, true, 303);
             exit;
+        } elseif ($action === 'edit') {
+            $id = (string)($_POST['id'] ?? '');
+            $title = trim((string)($_POST['title'] ?? ''));
+            $artist = trim((string)($_POST['artist'] ?? ''));
+            $description = trim((string)($_POST['description'] ?? ''));
+            if (!preg_match('/^[a-f0-9]{32}$/', $id)) throw new RuntimeException('잘못된 음악입니다.');
+            if ($title === '' || mb_strlen($title) > 100 || mb_strlen($artist) > 80 || mb_strlen($description) > 500) {
+                throw new RuntimeException('제목·제작자·소개를 확인해 주세요.');
+            }
+            if ($artist === '') $artist = explode('@', $email)[0];
+            music_mutate($dataDir, $indexFile, $prefix, function (&$tracks) use ($id, $email, $admin, $title, $artist, $description): void {
+                foreach ($tracks as &$track) {
+                    if (($track['id'] ?? '') !== $id) continue;
+                    if (!$admin && strcasecmp((string)($track['owner'] ?? ''), $email) !== 0) throw new RuntimeException('본인 음악만 수정할 수 있습니다.');
+                    $track['title'] = $title;
+                    $track['artist'] = $artist;
+                    $track['description'] = $description;
+                    return;
+                }
+                throw new RuntimeException('음악을 찾을 수 없습니다.');
+            });
+            header('Location: /music/#music-' . $id, true, 303);
+            exit;
         } elseif ($action === 'cover') {
             $id = (string)($_POST['id'] ?? '');
             if (!preg_match('/^[a-f0-9]{32}$/', $id)) throw new RuntimeException('잘못된 음악입니다.');
@@ -273,6 +296,7 @@ require dirname(__DIR__) . '/includes/header.php';
 .music-description{margin:14px 0 0;color:#d7e4ee;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
 .music-player-wrap{margin-top:18px;padding:12px;border:1px solid rgba(150,190,220,.17);background:rgba(255,255,255,.04);border-radius:14px}
 .music-player{display:block;width:100%}
+.music-edit-panel{margin-top:18px}.music-edit-panel summary{display:inline-flex;cursor:pointer;list-style:none}.music-edit-panel summary::-webkit-details-marker{display:none}.music-edit-form{margin-top:12px;display:grid;gap:12px;max-width:560px}.music-edit-form label{display:grid;gap:6px;color:#d2e1ec;font-size:14px}.music-edit-form input,.music-edit-form textarea{width:100%;box-sizing:border-box;background:#071c2e;border:1px solid #486b82;border-radius:8px;color:#fff;padding:10px;font:inherit}.music-edit-form button{justify-self:start}
 .music-actions{margin-top:14px}
 .music-cover-form{margin-top:16px;display:flex;gap:10px;align-items:end;flex-wrap:wrap;font-size:13px;color:#b1c5d6}.music-cover-form input{display:block;margin-top:6px;max-width:240px}
 .music-empty{color:#a8bacb}
@@ -388,6 +412,18 @@ require dirname(__DIR__) . '/includes/header.php';
           <?php endif; ?>
         </section>
         <?php if ($email !== '' && ($admin || strcasecmp($email, (string)($track['owner'] ?? '')) === 0)): ?>
+          <details class="music-edit-panel">
+            <summary class="button secondary">수정</summary>
+            <form method="post" class="music-edit-form">
+              <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
+              <input type="hidden" name="action" value="edit">
+              <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
+              <label>제목<input type="text" name="title" maxlength="100" required value="<?= music_h($title) ?>"></label>
+              <label>제작자<input type="text" name="artist" maxlength="80" value="<?= music_h($artist) ?>"></label>
+              <label>소개<textarea name="description" maxlength="500" rows="3"><?= music_h($description) ?></textarea></label>
+              <button type="submit" class="button primary">수정 저장</button>
+            </form>
+          </details>
           <form method="post" enctype="multipart/form-data" class="music-cover-form">
             <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
             <input type="hidden" name="action" value="cover">
