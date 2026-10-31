@@ -6,12 +6,13 @@ declare(strict_types=1);
  * Only non-executable audio extensions are stored, using random file names.
  */
 require_once dirname(__DIR__) . '/includes/admin.php';
+require_once dirname(__DIR__) . '/includes/db.php';
 
 $root = __DIR__;
 $audioDir = $root . '/uploads';
 $dataDir = $root . '/data';
 $indexFile = $dataDir . '/tracks.php';
-$commentsFile = $dataDir . '/comments.php';
+$commentsFile = $dataDir . '/comments.php'; // Legacy comments, read-only for migration
 $prefix = "<?php http_response_code(404); exit; ?>\n";
 $maxBytes = 10 * 1024 * 1024;
 $email = gamelab_login_email();
@@ -65,12 +66,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $google = is_array($_SESSION['google_user'] ?? null) ? $_SESSION['google_user'] : [];
             $writer = trim((string)($google['name'] ?? ''));
             if ($writer === '') $writer = explode('@', $email)[0];
-            music_mutate($dataDir, $commentsFile, $prefix, function (&$comments) use ($trackId, $body, $writer, $email): void {
-                $comments[] = [
-                    'id' => bin2hex(random_bytes(12)), 'track_id' => $trackId,
-                    'body' => $body, 'name' => $writer, 'owner' => $email, 'created' => date('Y-m-d H:i')
-                ];
-            });
+            $db = gamelab_db();
+            $stmt = $db->prepare('INSERT INTO gamelab_music_comments (id, track_id, body, name, owner, created_at) VALUES (?, ?, ?, ?, ?, NOW())');
+            $stmt->execute([bin2hex(random_bytes(12)), $trackId, $body, $writer, $email]);
             header('Location: /music/#music-' . $trackId, true, 303);
             exit;
         } elseif ($action === 'upload') {
@@ -157,11 +155,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $tracks = music_read($indexFile, $prefix);
-$allComments = music_read($commentsFile, $prefix);
 $commentsByTrack = [];
-foreach ($allComments as $comment) {
-    $trackId = (string)($comment['track_id'] ?? '');
-    if (preg_match('/^[a-f0-9]{32}$/', $trackId)) $commentsByTrack[$trackId][] = $comment;
+$commentsError = '';
+try {
+    $db = gamelab_db();
+    $stmt = $db->query('SELECT id, track_id, body, name, owner, DATE_FORMAT(created_at, \'%Y-%m-%d %H:%i\') AS created FROM gamelab_music_comments ORDER BY created_at ASC, id ASC');
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $comment) {
+        $trackId = (string)($comment['track_id'] ?? '');
+        if (preg_match('/^[a-f0-9]{32}$/', $trackId)) $commentsByTrack[$trackId][] = $comment;
+    }
+} catch (Throwable $e) {
+    error_log('[music comments] ' . $e->getMessage());
+    $commentsError = '댓글 DB 테이블을 확인해 주세요.';
 }
 $pageTitle = '음악';
 require dirname(__DIR__) . '/includes/header.php';
@@ -208,6 +213,7 @@ require dirname(__DIR__) . '/includes/header.php';
 <div class="container" style="max-width:1000px;min-height:50vh">
   <?php foreach ($messages as $m): ?><p role="status" style="color:#9be3ae"><?= music_h($m) ?></p><?php endforeach; ?>
   <?php if ($error): ?><p role="alert" style="color:#ffaaa7"><?= music_h($error) ?></p><?php endif; ?>
+  <?php if ($commentsError): ?><p role="alert" style="color:#ffaaa7"><?= music_h($commentsError) ?></p><?php endif; ?>
   <?php if ($email !== ''): ?>
     <section style="border:1px solid #54657a;border-radius:12px;padding:20px;margin:26px 0">
       <h2 style="margin-top:0;font-size:20px">내 음악 등록</h2>
