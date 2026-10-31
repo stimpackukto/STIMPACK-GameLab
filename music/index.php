@@ -216,7 +216,7 @@ require dirname(__DIR__) . '/includes/header.php';
           <p class="music-description"><?= music_h($description) ?></p>
         <?php endif; ?>
         <div class="music-player-wrap">
-          <audio class="music-player" controls preload="metadata" src="<?= music_h('/music/uploads/' . $file) ?>"></audio>
+          <audio class="music-player" controls controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false" preload="metadata" src="<?= music_h('/music/uploads/' . $file) ?>"></audio>
         </div>
         <?php if ($email !== '' && ($admin || strcasecmp($email, (string)($track['owner'] ?? '')) === 0)): ?>
           <form method="post" class="music-actions" onsubmit="return confirm('이 음악을 삭제할까요?')">
