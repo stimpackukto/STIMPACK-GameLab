@@ -296,6 +296,8 @@ $scriptVersion = (string)(@filemtime(dirname(__DIR__) . '/assets/js/app.js') ?: 
                 앱
             </a>
 
+            <a class="<?= is_active('/music') ? 'active' : '' ?>" href="/music/">음악</a>
+
 
             <a
                 class="<?= is_active('/test') ? 'active' : '' ?>"
