@@ -1,0 +1,167 @@
+<?php
+declare(strict_types=1);
+
+/* STIMPACK GAME LAB — original music sharing
+ * Read access: public; uploads: signed-in Google users; removals: author or admin.
+ * Only non-executable audio extensions are stored, using random file names.
+ */
+require_once dirname(__DIR__) . '/includes/admin.php';
+
+$root = __DIR__;
+$audioDir = $root . '/uploads';
+$dataDir = $root . '/data';
+$indexFile = $dataDir . '/tracks.php';
+$prefix = "<?php http_response_code(404); exit; ?>\n";
+$maxBytes = 20 * 1024 * 1024;
+$email = gamelab_login_email();
+$admin = gamelab_is_admin();
+$messages = [];
+$error = '';
+
+function music_h(string $v): string { return htmlspecialchars($v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
+function music_read(string $file, string $prefix): array {
+    if (!is_file($file)) return [];
+    $s = @file_get_contents($file);
+    if (!is_string($s) || !str_starts_with($s, $prefix)) return [];
+    $v = json_decode(substr($s, strlen($prefix)), true);
+    return is_array($v) ? $v : [];
+}
+function music_mutate(string $dir, string $file, string $prefix, callable $fn): void {
+    if (!is_dir($dir) && !@mkdir($dir, 0750, true) && !is_dir($dir)) throw new RuntimeException('저장 디렉터리를 만들 수 없습니다.');
+    $lock = @fopen($dir . '/.music.lock', 'c');
+    if (!$lock || !flock($lock, LOCK_EX)) throw new RuntimeException('저장 잠금을 확보하지 못했습니다.');
+    try {
+        $tracks = music_read($file, $prefix);
+        $fn($tracks);
+        $tmp = tempnam($dir, '.tracks-');
+        if ($tmp === false) throw new RuntimeException('저장 파일을 만들 수 없습니다.');
+        $json = json_encode($tracks, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        if (file_put_contents($tmp, $prefix . $json) === false || !rename($tmp, $file)) {
+            @unlink($tmp);
+            throw new RuntimeException('목록 저장에 실패했습니다.');
+        }
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        if ($email === '') throw new RuntimeException('음악을 등록하려면 구글 로그인이 필요합니다.');
+        if (!gamelab_verify_csrf((string)($_POST['csrf'] ?? ''))) throw new RuntimeException('요청이 만료되었습니다. 새로고침 후 다시 시도해 주세요.');
+        $action = (string)($_POST['action'] ?? '');
+        if ($action === 'upload') {
+            $title = trim((string)($_POST['title'] ?? ''));
+            $artist = trim((string)($_POST['artist'] ?? ''));
+            $description = trim((string)($_POST['description'] ?? ''));
+            if ($title === '' || mb_strlen($title) > 100 || mb_strlen($artist) > 80 || mb_strlen($description) > 500) throw new RuntimeException('제목·제작자·설명을 확인해 주세요.');
+            if ($artist === '') $artist = explode('@', $email)[0];
+            if (empty($_POST['rights'])) throw new RuntimeException('직접 제작했거나 공개 권한이 있는 음악만 등록할 수 있습니다.');
+            $f = $_FILES['audio'] ?? null;
+            if (!is_array($f) || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) throw new RuntimeException('음원 업로드에 실패했습니다.');
+            $size = (int)($f['size'] ?? 0);
+            if ($size < 1 || $size > $maxBytes || !is_uploaded_file((string)$f['tmp_name'])) throw new RuntimeException('음원 크기는 20MB 이하여야 합니다.');
+            $mime = (new finfo(FILEINFO_MIME_TYPE))->file((string)$f['tmp_name']);
+            $ext = match ($mime) {
+                'audio/mpeg', 'audio/mp3' => 'mp3',
+                'audio/ogg', 'application/ogg' => 'ogg',
+                'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/vnd.wave' => 'wav',
+                'audio/mp4', 'audio/x-m4a' => 'm4a',
+                'audio/webm' => 'webm',
+                default => null
+            };
+            if ($ext === null) throw new RuntimeException('MP3, OGG, WAV, M4A, WebM 음원만 등록할 수 있습니다.');
+            if (!is_dir($audioDir) && !@mkdir($audioDir, 0755, true) && !is_dir($audioDir)) throw new RuntimeException('음원 저장 디렉터리를 만들 수 없습니다.');
+            $id = bin2hex(random_bytes(16));
+            $filename = $id . '.' . $ext;
+            if (!move_uploaded_file((string)$f['tmp_name'], $audioDir . '/' . $filename)) throw new RuntimeException('음원 저장에 실패했습니다. 서버 쓰기 권한을 확인해 주세요.');
+            @chmod($audioDir . '/' . $filename, 0644);
+            try {
+                music_mutate($dataDir, $indexFile, $prefix, function (&$tracks) use ($id, $filename, $title, $artist, $description, $email): void {
+                    array_unshift($tracks, [
+                        'id' => $id, 'file' => $filename, 'title' => $title, 'artist' => $artist,
+                        'description' => $description, 'owner' => $email, 'created' => gmdate('c')
+                    ]);
+                });
+            } catch (Throwable $e) {
+                @unlink($audioDir . '/' . $filename);
+                throw $e;
+            }
+            $messages[] = '음악이 등록되었습니다.';
+        } elseif ($action === 'delete') {
+            $id = (string)($_POST['id'] ?? '');
+            $removed = null;
+            music_mutate($dataDir, $indexFile, $prefix, function (&$tracks) use ($id, $email, $admin, &$removed): void {
+                foreach ($tracks as $i => $track) {
+                    if (($track['id'] ?? '') !== $id) continue;
+                    if (!$admin && strcasecmp((string)($track['owner'] ?? ''), $email) !== 0) throw new RuntimeException('본인 음악만 삭제할 수 있습니다.');
+                    $removed = (string)$track['file'];
+                    array_splice($tracks, $i, 1);
+                    return;
+                }
+                throw new RuntimeException('음악을 찾을 수 없습니다.');
+            });
+            if ($removed && preg_match('/^[a-f0-9]{32}\.(mp3|ogg|wav|m4a|webm)$/', $removed)) @unlink($audioDir . '/' . $removed);
+            $messages[] = '음악을 삭제했습니다.';
+        } else throw new RuntimeException('잘못된 요청입니다.');
+    } catch (Throwable $e) {
+        $error = $e->getMessage();
+    }
+}
+
+$tracks = music_read($indexFile, $prefix);
+$pageTitle = '음악';
+require dirname(__DIR__) . '/includes/header.php';
+?>
+<main class="container" style="max-width:1000px; padding:38px 16px 72px; min-height:65vh;">
+  <h1 style="margin:0 0 8px">음악</h1>
+  <p style="opacity:.75">직접 만든 음악을 공유하고 자유롭게 감상하는 공간입니다. 듣기는 로그인 없이 가능합니다.</p>
+  <?php foreach ($messages as $m): ?><p role="status" style="color:#9be3ae"><?= music_h($m) ?></p><?php endforeach; ?>
+  <?php if ($error): ?><p role="alert" style="color:#ffaaa7"><?= music_h($error) ?></p><?php endif; ?>
+  <?php if ($email !== ''): ?>
+    <section style="border:1px solid #54657a;border-radius:12px;padding:20px;margin:26px 0">
+      <h2 style="margin-top:0;font-size:20px">내 음악 등록</h2>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
+        <input type="hidden" name="action" value="upload">
+        <label>제목 <input name="title" maxlength="100" required style="display:block;width:100%;padding:10px;margin:7px 0 14px"></label>
+        <label>제작자 <input name="artist" maxlength="80" placeholder="비우면 로그인 계정 이름 사용" style="display:block;width:100%;padding:10px;margin:7px 0 14px"></label>
+        <label>소개 <textarea name="description" maxlength="500" rows="3" style="display:block;width:100%;padding:10px;margin:7px 0 14px"></textarea></label>
+        <label>음악 파일 (MP3, OGG, WAV, M4A, WebM / 20MB 이하)
+          <input type="file" name="audio" accept=".mp3,.ogg,.wav,.m4a,.webm,audio/*" required style="display:block;margin:10px 0 16px">
+        </label>
+        <label style="display:block;margin-bottom:16px"><input type="checkbox" name="rights" value="1" required> 직접 제작했거나 공개·공유 권한이 있는 음원임을 확인합니다.</label>
+        <button type="submit" style="padding:10px 22px;cursor:pointer">음악 등록</button>
+      </form>
+    </section>
+  <?php else: ?>
+    <p><a href="/auth/google_login.php">구글 로그인 후 내 음악 등록하기</a></p>
+  <?php endif; ?>
+  <h2 style="margin-top:36px">공개 음악 <small style="opacity:.6">(<?= count($tracks) ?>곡)</small></h2>
+  <?php if (!$tracks): ?><p style="opacity:.7">아직 등록된 음악이 없습니다.</p><?php endif; ?>
+  <div style="display:grid;gap:14px">
+  <?php foreach ($tracks as $track):
+    $file = (string)($track['file'] ?? '');
+    if (!preg_match('/^[a-f0-9]{32}\.(mp3|ogg|wav|m4a|webm)$/', $file)) continue;
+  ?>
+    <article style="border:1px solid #425369;border-radius:12px;padding:18px;min-width:0">
+      <h3 style="margin:0 0 4px"><?= music_h((string)($track['title'] ?? '제목 없음')) ?></h3>
+      <div style="opacity:.7;font-size:14px">제작: <?= music_h((string)($track['artist'] ?? '')) ?> · <?= music_h(substr((string)($track['created'] ?? ''), 0, 10)) ?></div>
+      <?php if (!empty($track['description'])): ?><p style="white-space:pre-wrap"><?= music_h((string)$track['description']) ?></p><?php endif; ?>
+      <audio controls preload="none" style="display:block;width:100%;margin-top:14px" src="<?= music_h('/music/uploads/' . $file) ?>"></audio>
+      <?php if ($email !== '' && ($admin || strcasecmp($email, (string)($track['owner'] ?? '')) === 0)): ?>
+        <form method="post" onsubmit="return confirm('이 음악을 삭제할까요?')" style="margin-top:12px">
+          <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
+          <input type="hidden" name="action" value="delete">
+          <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
+          <button type="submit">삭제</button>
+        </form>
+      <?php endif; ?>
+    </article>
+  <?php endforeach; ?>
+  </div>
+</main>
+<?php
+$footer = dirname(__DIR__) . '/includes/footer.php';
+if (is_file($footer)) require $footer;
