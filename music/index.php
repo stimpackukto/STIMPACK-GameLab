@@ -12,7 +12,7 @@ $audioDir = $root . '/uploads';
 $dataDir = $root . '/data';
 $indexFile = $dataDir . '/tracks.php';
 $prefix = "<?php http_response_code(404); exit; ?>\n";
-$maxBytes = 5 * 1024 * 1024;
+$maxBytes = 10 * 1024 * 1024;
 $email = gamelab_login_email();
 $admin = gamelab_is_admin();
 $messages = [];
@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($uploadError === UPLOAD_ERR_INI_SIZE || $uploadError === UPLOAD_ERR_FORM_SIZE) throw new RuntimeException('PHP 업로드 허용 크기를 초과했습니다. music/.user.ini 설정을 확인해 주세요.');
             if ($uploadError !== UPLOAD_ERR_OK) throw new RuntimeException('음원 업로드에 실패했습니다. 오류 코드: ' . $uploadError);
             $size = (int)($f['size'] ?? 0);
-            if ($size < 1 || $size > $maxBytes || !is_uploaded_file((string)$f['tmp_name'])) throw new RuntimeException('음원 크기는 5MB 이하여야 합니다.');
+            if ($size < 1 || $size > $maxBytes || !is_uploaded_file((string)$f['tmp_name'])) throw new RuntimeException('음원 크기는 10MB 이하여야 합니다.');
             // Fileinfo may label valid OGG/Opus as application/octet-stream.
             // Allow only supported file extensions; FFmpeg must successfully decode audio.
             $originalExt = strtolower((string)pathinfo((string)($f['name'] ?? ''), PATHINFO_EXTENSION));
@@ -152,7 +152,7 @@ require dirname(__DIR__) . '/includes/header.php';
         <label>제목 <input name="title" maxlength="100" required style="display:block;width:100%;padding:10px;margin:7px 0 14px"></label>
         <label>제작자 <input name="artist" maxlength="80" placeholder="비우면 로그인 계정 이름 사용" style="display:block;width:100%;padding:10px;margin:7px 0 14px"></label>
         <label>소개 <textarea name="description" maxlength="500" rows="3" style="display:block;width:100%;padding:10px;margin:7px 0 14px"></textarea></label>
-        <label>음악 파일 (MP3, OGG, WAV, M4A, WebM / 5MB 이하 · OGG로 압축 저장)
+        <label>음악 파일 (MP3, OGG, WAV, M4A, WebM / 원본 10MB 이하 · OGG로 압축 저장)
           <input type="file" name="audio" accept=".mp3,.ogg,.wav,.m4a,.webm,audio/*" required style="display:block;margin:10px 0 16px">
         </label>
         <label style="display:block;margin-bottom:16px"><input type="checkbox" name="rights" value="1" required> 직접 제작했거나 공개·공유 권한이 있는 음원임을 확인합니다.</label>
