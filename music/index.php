@@ -422,6 +422,7 @@ require dirname(__DIR__) . '/includes/header.php';
         <div class="music-player-wrap">
           <audio class="music-player" controls controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false" preload="metadata" src="<?= music_h('/music/uploads/' . $file) ?>"></audio>
         </div>
+          <?php $trackComments = $commentsByTrack[(string)$track['id']] ?? []; ?>
         <div class="music-toolbar">
           <button type="button" class="button secondary music-review-toggle" data-target="music-reviews-<?= music_h((string)$track['id']) ?>" aria-controls="music-reviews-<?= music_h((string)$track['id']) ?>" aria-expanded="false">리뷰 · 의견 <?= count($trackComments) ?></button>
 
@@ -450,7 +451,6 @@ require dirname(__DIR__) . '/includes/header.php';
         <?php endif; ?>
         </div>
         <section class="music-comments" id="music-reviews-<?= music_h((string)$track['id']) ?>" hidden>
-          <?php $trackComments = $commentsByTrack[(string)$track['id']] ?? []; ?>
           <div class="music-review-heading">사용후기 <small>(<?= count($trackComments) ?>)</small></div>
           <?php if (!$trackComments): ?>
             <div class="music-review-empty">아직 등록된 의견이 없습니다.<br>첫 의견을 남겨보세요.</div>
