@@ -11,6 +11,7 @@ $root = __DIR__;
 $audioDir = $root . '/uploads';
 $dataDir = $root . '/data';
 $indexFile = $dataDir . '/tracks.php';
+$commentsFile = $dataDir . '/comments.php';
 $prefix = "<?php http_response_code(404); exit; ?>\n";
 $maxBytes = 10 * 1024 * 1024;
 $email = gamelab_login_email();
@@ -51,7 +52,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($email === '') throw new RuntimeException('음악을 등록하려면 구글 로그인이 필요합니다.');
         if (!gamelab_verify_csrf((string)($_POST['csrf'] ?? ''))) throw new RuntimeException('요청이 만료되었습니다. 새로고침 후 다시 시도해 주세요.');
         $action = (string)($_POST['action'] ?? '');
-        if ($action === 'upload') {
+        if ($action === 'comment') {
+            $trackId = (string)($_POST['track_id'] ?? '');
+            $body = trim((string)($_POST['body'] ?? ''));
+            if (!preg_match('/^[a-f0-9]{32}$/', $trackId)) throw new RuntimeException('잘못된 음악입니다.');
+            if ($body === '' || mb_strlen($body, 'UTF-8') > 1000) throw new RuntimeException('댓글은 1~1000자로 입력해 주세요.');
+            $exists = false;
+            foreach (music_read($indexFile, $prefix) as $track) {
+                if (($track['id'] ?? '') === $trackId) { $exists = true; break; }
+            }
+            if (!$exists) throw new RuntimeException('음악을 찾을 수 없습니다.');
+            $google = is_array($_SESSION['google_user'] ?? null) ? $_SESSION['google_user'] : [];
+            $writer = trim((string)($google['name'] ?? ''));
+            if ($writer === '') $writer = explode('@', $email)[0];
+            music_mutate($dataDir, $commentsFile, $prefix, function (&$comments) use ($trackId, $body, $writer, $email): void {
+                $comments[] = [
+                    'id' => bin2hex(random_bytes(12)), 'track_id' => $trackId,
+                    'body' => $body, 'name' => $writer, 'owner' => $email, 'created' => date('Y-m-d H:i')
+                ];
+            });
+            header('Location: /music/#music-' . $trackId, true, 303);
+            exit;
+        } elseif ($action === 'upload') {
             $title = trim((string)($_POST['title'] ?? ''));
             $artist = trim((string)($_POST['artist'] ?? ''));
             $description = trim((string)($_POST['description'] ?? ''));
@@ -135,6 +157,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $tracks = music_read($indexFile, $prefix);
+$allComments = music_read($commentsFile, $prefix);
+$commentsByTrack = [];
+foreach ($allComments as $comment) {
+    $trackId = (string)($comment['track_id'] ?? '');
+    if (preg_match('/^[a-f0-9]{32}$/', $trackId)) $commentsByTrack[$trackId][] = $comment;
+}
 $pageTitle = '음악';
 require dirname(__DIR__) . '/includes/header.php';
 ?>
@@ -154,6 +182,16 @@ require dirname(__DIR__) . '/includes/header.php';
 .music-player{display:block;width:100%}
 .music-actions{margin-top:14px}
 .music-empty{color:#a8bacb}
+.music-comments{margin-top:22px;padding-top:16px;border-top:1px solid rgba(140,178,202,.22)}
+.music-comments h4{margin:0 0 14px;font-size:16px;color:#d6e8f5}
+.music-comment{padding:12px 0;border-top:1px solid rgba(140,178,202,.12)}
+.music-comment:first-of-type{border-top:0}
+.music-comment-head{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:13px}
+.music-comment-head time{color:#93abc0}
+.music-comment p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;margin:8px 0}
+.music-comment-form textarea{width:100%;box-sizing:border-box;border:1px solid #4b6c84;border-radius:9px;background:#061b2c;color:#f1f7ff;padding:12px;min-height:72px;resize:vertical;display:block;margin-bottom:10px}
+.music-comment-form button{cursor:pointer}
+.music-comment-login{font-size:13px;color:#adc4d8}
 @media(max-width:700px){.music-card{grid-template-columns:1fr;padding:16px}.music-thumb{width:100px;height:100px}.music-title{font-size:22px}}
 </style>
 <section class="subhero">
@@ -199,7 +237,7 @@ require dirname(__DIR__) . '/includes/header.php';
     $description = trim((string)($track['description'] ?? ''));
     $ext = strtoupper((string)pathinfo($file, PATHINFO_EXTENSION));
   ?>
-    <article class="music-card">
+    <article class="music-card" id="music-<?= music_h((string)$track['id']) ?>">
       <div class="music-thumb" aria-hidden="true">♪</div>
       <div class="music-body">
         <h3 class="music-title"><?= music_h($title) ?></h3>
@@ -218,6 +256,30 @@ require dirname(__DIR__) . '/includes/header.php';
         <div class="music-player-wrap">
           <audio class="music-player" controls controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false" preload="metadata" src="<?= music_h('/music/uploads/' . $file) ?>"></audio>
         </div>
+        <section class="music-comments">
+          <?php $trackComments = $commentsByTrack[(string)$track['id']] ?? []; ?>
+          <h4>댓글 <?= count($trackComments) ?></h4>
+          <?php foreach ($trackComments as $comment): ?>
+            <div class="music-comment">
+              <div class="music-comment-head">
+                <strong><?= music_h((string)($comment['name'] ?? '방문자')) ?></strong>
+                <time><?= music_h((string)($comment['created'] ?? '')) ?></time>
+              </div>
+              <p><?= music_h((string)($comment['body'] ?? '')) ?></p>
+            </div>
+          <?php endforeach; ?>
+          <?php if ($email !== ''): ?>
+            <form method="post" class="music-comment-form">
+              <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
+              <input type="hidden" name="action" value="comment">
+              <input type="hidden" name="track_id" value="<?= music_h((string)$track['id']) ?>">
+              <textarea name="body" maxlength="1000" required placeholder="음악에 대한 감상을 남겨주세요"></textarea>
+              <button type="submit" class="button secondary">댓글 등록</button>
+            </form>
+          <?php else: ?>
+            <p class="music-comment-login"><a href="/auth/google_login.php">구글 로그인</a> 후 댓글을 작성할 수 있습니다.</p>
+          <?php endif; ?>
+        </section>
         <?php if ($email !== '' && ($admin || strcasecmp($email, (string)($track['owner'] ?? '')) === 0)): ?>
           <form method="post" class="music-actions" onsubmit="return confirm('이 음악을 삭제할까요?')">
             <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
