@@ -65,16 +65,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($uploadError !== UPLOAD_ERR_OK) throw new RuntimeException('음원 업로드에 실패했습니다. 오류 코드: ' . $uploadError);
             $size = (int)($f['size'] ?? 0);
             if ($size < 1 || $size > $maxBytes || !is_uploaded_file((string)$f['tmp_name'])) throw new RuntimeException('음원 크기는 5MB 이하여야 합니다.');
-            $mime = (new finfo(FILEINFO_MIME_TYPE))->file((string)$f['tmp_name']);
-            $ext = match ($mime) {
-                'audio/mpeg', 'audio/mp3' => 'mp3',
-                'audio/ogg', 'application/ogg' => 'ogg',
-                'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/vnd.wave' => 'wav',
-                'audio/mp4', 'audio/x-m4a' => 'm4a',
-                'audio/webm' => 'webm',
-                default => null
-            };
-            if ($ext === null) throw new RuntimeException('MP3, OGG, WAV, M4A, WebM 음원만 등록할 수 있습니다.');
+            // Fileinfo may label valid OGG/Opus as application/octet-stream.
+            // Allow only supported file extensions; FFmpeg must successfully decode audio.
+            $originalExt = strtolower((string)pathinfo((string)($f['name'] ?? ''), PATHINFO_EXTENSION));
+            if (!in_array($originalExt, ['mp3', 'ogg', 'wav', 'm4a', 'webm'], true)) {
+                throw new RuntimeException('MP3, OGG, WAV, M4A, WebM 음원만 등록할 수 있습니다.');
+            }
             if (!is_dir($audioDir) && !@mkdir($audioDir, 0755, true) && !is_dir($audioDir)) throw new RuntimeException('음원 저장 디렉터리를 만들 수 없습니다.');
             $id = bin2hex(random_bytes(16));
             // All uploads are transcoded to efficient OGG/Opus; source is not stored.
