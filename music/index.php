@@ -317,7 +317,7 @@ require dirname(__DIR__) . '/includes/header.php';
 .music-description{margin:14px 0 0;color:#d7e4ee;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
 .music-player-wrap{margin-top:18px;padding:12px;border:1px solid rgba(150,190,220,.17);background:rgba(255,255,255,.04);border-radius:14px}
 .music-player{display:block;width:100%}
-.music-manage-actions{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-top:14px}.music-manage-actions .music-actions{margin-top:0}.music-edit-panel{margin-top:0}.music-edit-panel[open]{flex-basis:100%;order:3}.music-edit-panel summary{display:inline-flex;cursor:pointer;list-style:none}.music-edit-panel summary::-webkit-details-marker{display:none}.music-edit-form{margin-top:12px;display:grid;gap:12px;max-width:560px}.music-edit-form label{display:grid;gap:6px;color:#d2e1ec;font-size:14px}.music-edit-form input,.music-edit-form textarea{width:100%;box-sizing:border-box;background:#071c2e;border:1px solid #486b82;border-radius:8px;color:#fff;padding:10px;font:inherit}.music-edit-form button{justify-self:start}
+.music-comment-action-row{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-top:10px}.music-comment-action-row .music-comment-form{margin:0}.music-comment-action-row .music-manage-actions{margin:0}.music-manage-actions{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-top:14px}.music-manage-actions .music-actions{margin-top:0}.music-edit-panel{margin-top:0}.music-edit-panel[open]{flex-basis:100%;order:3}.music-edit-panel summary{display:inline-flex;cursor:pointer;list-style:none}.music-edit-panel summary::-webkit-details-marker{display:none}.music-edit-form{margin-top:12px;display:grid;gap:12px;max-width:560px}.music-edit-form label{display:grid;gap:6px;color:#d2e1ec;font-size:14px}.music-edit-form input,.music-edit-form textarea{width:100%;box-sizing:border-box;background:#071c2e;border:1px solid #486b82;border-radius:8px;color:#fff;padding:10px;font:inherit}.music-edit-form button{justify-self:start}
 .music-actions{margin-top:14px}
 .music-cover-form{margin-top:16px;display:flex;gap:10px;align-items:end;flex-wrap:wrap;font-size:13px;color:#b1c5d6}.music-cover-form input{display:block;margin-top:6px;max-width:240px}
 .music-empty{color:#a8bacb}
@@ -421,6 +421,7 @@ require dirname(__DIR__) . '/includes/header.php';
             </div>
           <?php endforeach; ?>
           <?php if ($email !== ''): ?>
+            <div class="music-comment-action-row">
             <form method="post" class="music-comment-form">
               <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
               <input type="hidden" name="action" value="comment">
@@ -428,10 +429,6 @@ require dirname(__DIR__) . '/includes/header.php';
               <textarea name="body" maxlength="1000" required placeholder="음악에 대한 감상을 남겨주세요"></textarea>
               <button type="submit" class="button secondary">댓글 등록</button>
             </form>
-          <?php else: ?>
-            <p class="music-comment-login"><a href="/auth/google_login.php">구글 로그인</a> 후 댓글을 작성할 수 있습니다.</p>
-          <?php endif; ?>
-        </section>
         <?php if ($email !== '' && ($admin || strcasecmp($email, (string)($track['owner'] ?? '')) === 0)): ?>
           <div class="music-manage-actions">
           <form method="post" class="music-actions" onsubmit="return confirm('이 음악을 삭제할까요?')">
@@ -455,6 +452,12 @@ require dirname(__DIR__) . '/includes/header.php';
           </details>
           </div>
         <?php endif; ?>
+            </div>
+          <?php else: ?>
+            <p class="music-comment-login"><a href="/auth/google_login.php">구글 로그인</a> 후 댓글을 작성할 수 있습니다.</p>
+          <?php endif; ?>
+        </section>
+
       </div>
     </article>
   <?php endforeach; ?>
