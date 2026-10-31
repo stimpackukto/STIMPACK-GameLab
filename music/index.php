@@ -332,6 +332,7 @@ require dirname(__DIR__) . '/includes/header.php';
 .music-comment-form button{cursor:pointer}
 .music-comment-login{font-size:13px;color:#adc4d8}
 .music-comments{margin-top:22px;padding:18px;border:1px solid #123b57;border-radius:13px;background:#071b2a}
+.music-toolbar{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-top:18px}.music-toolbar .music-manage-actions{margin:0}.music-comments[hidden]{display:none}
 .music-review-heading{font-size:17px;font-weight:700;color:#f4f8fc;margin-bottom:22px}
 .music-review-heading small{font-size:13px;color:#9caebf}
 .music-review-empty{color:#aebdcb;line-height:1.7;padding:6px 0 22px}
@@ -421,7 +422,34 @@ require dirname(__DIR__) . '/includes/header.php';
         <div class="music-player-wrap">
           <audio class="music-player" controls controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false" preload="metadata" src="<?= music_h('/music/uploads/' . $file) ?>"></audio>
         </div>
-        <section class="music-comments">
+        <div class="music-toolbar">
+          <button type="button" class="button secondary music-review-toggle" data-target="music-reviews-<?= music_h((string)$track['id']) ?>" aria-controls="music-reviews-<?= music_h((string)$track['id']) ?>" aria-expanded="false">리뷰 · 의견 <?= count($trackComments) ?></button>
+
+        <?php if ($email !== '' && ($admin || strcasecmp($email, (string)($track['owner'] ?? '')) === 0)): ?>
+          <div class="music-manage-actions">
+            <form method="post" class="music-actions" onsubmit="return confirm('이 음악을 삭제할까요?')">
+              <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
+              <button type="submit" class="button secondary">삭제</button>
+            </form>
+            <details class="music-edit-panel">
+              <summary class="button secondary">수정</summary>
+              <form method="post" enctype="multipart/form-data" class="music-edit-form">
+                <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
+                <label>제목<input type="text" name="title" maxlength="100" required value="<?= music_h($title) ?>"></label>
+                <label>제작자<input type="text" name="artist" maxlength="80" value="<?= music_h($artist) ?>"></label>
+                <label>소개<textarea name="description" maxlength="500" rows="3"><?= music_h($description) ?></textarea></label>
+                <label>프로필 사진 변경 (선택 · 원본 5MB 이하 · 자동 압축)<input type="file" name="cover" accept="image/jpeg,image/png,image/webp"></label>
+                <button type="submit" class="button primary">수정 저장</button>
+              </form>
+            </details>
+          </div>
+        <?php endif; ?>
+        </div>
+        <section class="music-comments" id="music-reviews-<?= music_h((string)$track['id']) ?>" hidden>
           <?php $trackComments = $commentsByTrack[(string)$track['id']] ?? []; ?>
           <div class="music-review-heading">사용후기 <small>(<?= count($trackComments) ?>)</small></div>
           <?php if (!$trackComments): ?>
@@ -453,31 +481,7 @@ require dirname(__DIR__) . '/includes/header.php';
               <a href="/auth/google_login.php">[의견 남기기]</a>
             <?php endif; ?>
           </div>
-        </section>
-        <?php if ($email !== '' && ($admin || strcasecmp($email, (string)($track['owner'] ?? '')) === 0)): ?>
-          <div class="music-manage-actions">
-            <form method="post" class="music-actions" onsubmit="return confirm('이 음악을 삭제할까요?')">
-              <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
-              <input type="hidden" name="action" value="delete">
-              <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
-              <button type="submit" class="button secondary">삭제</button>
-            </form>
-            <details class="music-edit-panel">
-              <summary class="button secondary">수정</summary>
-              <form method="post" enctype="multipart/form-data" class="music-edit-form">
-                <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
-                <input type="hidden" name="action" value="edit">
-                <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
-                <label>제목<input type="text" name="title" maxlength="100" required value="<?= music_h($title) ?>"></label>
-                <label>제작자<input type="text" name="artist" maxlength="80" value="<?= music_h($artist) ?>"></label>
-                <label>소개<textarea name="description" maxlength="500" rows="3"><?= music_h($description) ?></textarea></label>
-                <label>프로필 사진 변경 (선택 · 원본 5MB 이하 · 자동 압축)<input type="file" name="cover" accept="image/jpeg,image/png,image/webp"></label>
-                <button type="submit" class="button primary">수정 저장</button>
-              </form>
-            </details>
-          </div>
-        <?php endif; ?>
-      </div>
+        </section>      </div>
     </article>
   <?php endforeach; ?>
   </div>
@@ -485,6 +489,23 @@ require dirname(__DIR__) . '/includes/header.php';
 </main>
 <script>
 (function () {
+  document.querySelectorAll('.music-review-toggle').forEach(function (button) {
+    button.addEventListener('click', function () {
+      const panel = document.getElementById(button.dataset.target);
+      if (!panel) return;
+      panel.hidden = !panel.hidden;
+      button.setAttribute('aria-expanded', String(!panel.hidden));
+    });
+  });
+  if (location.hash.startsWith('#music-')) {
+    const trackId = location.hash.slice(7);
+    const panel = document.getElementById('music-reviews-' + trackId);
+    const button = document.querySelector('.music-review-toggle[data-target="music-reviews-' + trackId + '"]');
+    if (panel && button) {
+      panel.hidden = false;
+      button.setAttribute('aria-expanded', 'true');
+    }
+  }
   const button = document.getElementById('music-add-toggle');
   const panel = document.getElementById('music-upload-panel');
   if (!button || !panel) return;
