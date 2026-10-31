@@ -257,6 +257,8 @@ $pageTitle = '음악';
 require dirname(__DIR__) . '/includes/header.php';
 ?>
 <style>
+.music-header-actions{margin-top:22px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#music-upload-panel[hidden]{display:none}
 .music-list-heading{margin:36px 0 18px}
 .music-list-heading small{font-size:15px;color:#94a9ba}
 .music-list{display:grid;gap:18px}
@@ -293,6 +295,10 @@ require dirname(__DIR__) . '/includes/header.php';
     <p>직접 만든 음악을 공유하고 자유롭게 감상하는 공간입니다. 듣기는 로그인 없이 가능합니다.</p>
     <?php if ($email === ''): ?>
       <a class="button secondary" href="/auth/google_login.php" style="margin-top:18px">Google 로그인</a>
+    <?php else: ?>
+      <div class="music-header-actions">
+        <button type="button" id="music-add-toggle" class="button primary" aria-controls="music-upload-panel" aria-expanded="false">＋ 음악 추가</button>
+      </div>
     <?php endif; ?>
   </div>
 </section>
@@ -302,7 +308,7 @@ require dirname(__DIR__) . '/includes/header.php';
   <?php if ($error): ?><p role="alert" style="color:#ffaaa7"><?= music_h($error) ?></p><?php endif; ?>
   <?php if ($commentsError): ?><p role="alert" style="color:#ffaaa7"><?= music_h($commentsError) ?></p><?php endif; ?>
   <?php if ($email !== ''): ?>
-    <section style="border:1px solid #54657a;border-radius:12px;padding:20px;margin:26px 0">
+    <section id="music-upload-panel" hidden style="border:1px solid #54657a;border-radius:12px;padding:20px;margin:26px 0">
       <h2 style="margin-top:0;font-size:20px">내 음악 등록</h2>
       <form method="post" enctype="multipart/form-data">
         <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
@@ -402,6 +408,25 @@ require dirname(__DIR__) . '/includes/header.php';
   </div>
 </div>
 </main>
+<script>
+(function () {
+  const button = document.getElementById('music-add-toggle');
+  const panel = document.getElementById('music-upload-panel');
+  if (!button || !panel) return;
+  button.addEventListener('click', function () {
+    const opening = panel.hidden;
+    panel.hidden = !opening;
+    button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    button.textContent = opening ? '－ 추가 닫기' : '＋ 음악 추가';
+    if (opening) panel.scrollIntoView({behavior:'smooth', block:'start'});
+  });
+  <?php if ($error !== ''): ?>
+  panel.hidden = false;
+  button.setAttribute('aria-expanded', 'true');
+  button.textContent = '－ 추가 닫기';
+  <?php endif; ?>
+})();
+</script>
 <?php
 $footer = dirname(__DIR__) . '/includes/footer.php';
 if (is_file($footer)) require $footer;
