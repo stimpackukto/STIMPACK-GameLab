@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS gamelab_community_comments (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ post_id BIGINT UNSIGNED NOT NULL,
+ parent_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+ google_sub VARCHAR(255) NOT NULL,
+ user_name VARCHAR(120) NOT NULL,
+ user_email VARCHAR(255) NOT NULL,
+ is_admin TINYINT(1) NOT NULL DEFAULT 0,
+ content TEXT NOT NULL,
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ KEY idx_post_thread (post_id,parent_id,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
