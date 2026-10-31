@@ -331,6 +331,19 @@ require dirname(__DIR__) . '/includes/header.php';
 .music-comment-form textarea{width:100%;box-sizing:border-box;border:1px solid #4b6c84;border-radius:9px;background:#061b2c;color:#f1f7ff;padding:12px;min-height:72px;resize:vertical;display:block;margin-bottom:10px}
 .music-comment-form button{cursor:pointer}
 .music-comment-login{font-size:13px;color:#adc4d8}
+.music-comments{margin-top:22px;padding:18px;border:1px solid #123b57;border-radius:13px;background:#071b2a}
+.music-review-heading{font-size:17px;font-weight:700;color:#f4f8fc;margin-bottom:22px}
+.music-review-heading small{font-size:13px;color:#9caebf}
+.music-review-empty{color:#aebdcb;line-height:1.7;padding:6px 0 22px}
+.music-review-item{padding:14px 0;border-top:1px solid rgba(140,178,202,.16)}
+.music-review-item:first-of-type{border-top:0}
+.music-review-item p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;margin:8px 0}
+.music-review-write{border-top:1px solid #234057;margin-top:12px;padding-top:16px}
+.music-review-write a,.music-review-compose summary{color:#2eaaff;font-weight:700;text-decoration:none;cursor:pointer}
+.music-review-compose summary{list-style:none;display:inline-block}
+.music-review-compose summary::-webkit-details-marker{display:none}
+.music-review-compose .music-comment-form{margin-top:16px}
+.music-review-compose .music-comment-form button{margin-top:10px}
 @media(max-width:700px){.music-card{grid-template-columns:1fr;padding:16px}.music-thumb{width:100px;height:100px}.music-title{font-size:22px}}
 </style>
 <section class="subhero">
@@ -410,54 +423,60 @@ require dirname(__DIR__) . '/includes/header.php';
         </div>
         <section class="music-comments">
           <?php $trackComments = $commentsByTrack[(string)$track['id']] ?? []; ?>
-          <h4>댓글 <?= count($trackComments) ?></h4>
-          <?php foreach ($trackComments as $comment): ?>
-            <div class="music-comment">
-              <div class="music-comment-head">
-                <strong><?= music_h((string)($comment['name'] ?? '방문자')) ?></strong>
-                <time><?= music_h((string)($comment['created'] ?? '')) ?></time>
+          <div class="music-review-heading">사용후기 <small>(<?= count($trackComments) ?>)</small></div>
+          <?php if (!$trackComments): ?>
+            <div class="music-review-empty">아직 등록된 의견이 없습니다.<br>첫 의견을 남겨보세요.</div>
+          <?php else: ?>
+            <?php foreach ($trackComments as $comment): ?>
+              <div class="music-review-item">
+                <div class="music-comment-head">
+                  <strong><?= music_h((string)($comment['name'] ?? '방문자')) ?></strong>
+                  <time><?= music_h((string)($comment['created'] ?? '')) ?></time>
+                </div>
+                <p><?= music_h((string)($comment['body'] ?? '')) ?></p>
               </div>
-              <p><?= music_h((string)($comment['body'] ?? '')) ?></p>
-            </div>
-          <?php endforeach; ?>
-          <?php if ($email !== ''): ?>
-            <form method="post" class="music-comment-form" id="comment-form-<?= music_h((string)$track['id']) ?>">
-              <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
-              <input type="hidden" name="action" value="comment">
-              <input type="hidden" name="track_id" value="<?= music_h((string)$track['id']) ?>">
-              <textarea name="body" maxlength="1000" required placeholder="음악에 대한 감상을 남겨주세요"></textarea>
-            </form>
-            <div class="music-comment-action-row">
-              <button type="submit" form="comment-form-<?= music_h((string)$track['id']) ?>" class="button secondary">댓글 등록</button>
+            <?php endforeach; ?>
+          <?php endif; ?>
+          <div class="music-review-write">
+            <?php if ($email !== ''): ?>
+              <details class="music-review-compose">
+                <summary>[의견 남기기]</summary>
+                <form method="post" class="music-comment-form">
+                  <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
+                  <input type="hidden" name="action" value="comment">
+                  <input type="hidden" name="track_id" value="<?= music_h((string)$track['id']) ?>">
+                  <textarea name="body" maxlength="1000" required placeholder="음악에 대한 감상을 남겨주세요"></textarea>
+                  <button type="submit" class="button secondary">댓글 등록</button>
+                </form>
+              </details>
+            <?php else: ?>
+              <a href="/auth/google_login.php">[의견 남기기]</a>
+            <?php endif; ?>
+          </div>
+        </section>
         <?php if ($email !== '' && ($admin || strcasecmp($email, (string)($track['owner'] ?? '')) === 0)): ?>
           <div class="music-manage-actions">
-          <form method="post" class="music-actions" onsubmit="return confirm('이 음악을 삭제할까요?')">
-            <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
-            <input type="hidden" name="action" value="delete">
-            <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
-            <button type="submit" class="button secondary">삭제</button>
-          </form>
-          <details class="music-edit-panel">
-            <summary class="button secondary">수정</summary>
-            <form method="post" enctype="multipart/form-data" class="music-edit-form">
+            <form method="post" class="music-actions" onsubmit="return confirm('이 음악을 삭제할까요?')">
               <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
-              <input type="hidden" name="action" value="edit">
+              <input type="hidden" name="action" value="delete">
               <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
-              <label>제목<input type="text" name="title" maxlength="100" required value="<?= music_h($title) ?>"></label>
-              <label>제작자<input type="text" name="artist" maxlength="80" value="<?= music_h($artist) ?>"></label>
-              <label>소개<textarea name="description" maxlength="500" rows="3"><?= music_h($description) ?></textarea></label>
-              <label>프로필 사진 변경 (선택 · 원본 5MB 이하 · 자동 압축)<input type="file" name="cover" accept="image/jpeg,image/png,image/webp"></label>
-              <button type="submit" class="button primary">수정 저장</button>
+              <button type="submit" class="button secondary">삭제</button>
             </form>
-          </details>
+            <details class="music-edit-panel">
+              <summary class="button secondary">수정</summary>
+              <form method="post" enctype="multipart/form-data" class="music-edit-form">
+                <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
+                <label>제목<input type="text" name="title" maxlength="100" required value="<?= music_h($title) ?>"></label>
+                <label>제작자<input type="text" name="artist" maxlength="80" value="<?= music_h($artist) ?>"></label>
+                <label>소개<textarea name="description" maxlength="500" rows="3"><?= music_h($description) ?></textarea></label>
+                <label>프로필 사진 변경 (선택 · 원본 5MB 이하 · 자동 압축)<input type="file" name="cover" accept="image/jpeg,image/png,image/webp"></label>
+                <button type="submit" class="button primary">수정 저장</button>
+              </form>
+            </details>
           </div>
         <?php endif; ?>
-            </div>
-          <?php else: ?>
-            <p class="music-comment-login"><a href="/auth/google_login.php">구글 로그인</a> 후 댓글을 작성할 수 있습니다.</p>
-          <?php endif; ?>
-        </section>
-
       </div>
     </article>
   <?php endforeach; ?>
