@@ -138,6 +138,24 @@ $tracks = music_read($indexFile, $prefix);
 $pageTitle = '음악';
 require dirname(__DIR__) . '/includes/header.php';
 ?>
+<style>
+.music-list-heading{margin:36px 0 18px}
+.music-list-heading small{font-size:15px;color:#94a9ba}
+.music-list{display:grid;gap:18px}
+.music-card{display:grid;grid-template-columns:120px minmax(0,1fr);gap:20px;padding:22px;border:1px solid rgba(86,122,148,.55);border-radius:18px;background:linear-gradient(160deg,#102a40,#071a2a);box-shadow:0 10px 24px rgba(0,0,0,.16)}
+.music-thumb{width:120px;height:120px;display:flex;align-items:center;justify-content:center;border-radius:15px;background:radial-gradient(circle at 30% 30%,rgba(77,187,255,.33),transparent 50%),linear-gradient(135deg,#144967,#0a2135);border:1px solid rgba(98,189,248,.25);color:#b9e8ff;font-size:52px}
+.music-body{min-width:0}
+.music-title{font-size:25px;margin:2px 0 8px;color:#fff;overflow-wrap:anywhere}
+.music-meta{display:flex;flex-wrap:wrap;gap:10px;color:#b1c5d6;font-size:14px}
+.music-badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.music-badge{padding:5px 11px;border-radius:20px;background:rgba(41,93,129,.33);border:1px solid rgba(98,189,248,.23);font-size:12px;color:#9ddaff}
+.music-description{margin:14px 0 0;color:#d7e4ee;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
+.music-player-wrap{margin-top:18px;padding:12px;border:1px solid rgba(150,190,220,.17);background:rgba(255,255,255,.04);border-radius:14px}
+.music-player{display:block;width:100%}
+.music-actions{margin-top:14px}
+.music-empty{color:#a8bacb}
+@media(max-width:700px){.music-card{grid-template-columns:1fr;padding:16px}.music-thumb{width:100px;height:100px}.music-title{font-size:22px}}
+</style>
 <section class="subhero">
   <div class="container">
     <p class="section-kicker">MUSIC</p>
@@ -169,26 +187,46 @@ require dirname(__DIR__) . '/includes/header.php';
       </form>
     </section>
   <?php endif; ?>
-  <h2 style="margin-top:36px">공개 음악 <small style="opacity:.6">(<?= count($tracks) ?>곡)</small></h2>
-  <?php if (!$tracks): ?><p style="opacity:.7">아직 등록된 음악이 없습니다.</p><?php endif; ?>
-  <div style="display:grid;gap:14px">
+  <h2 class="music-list-heading">공개 음악 <small>(<?= count($tracks) ?>곡)</small></h2>
+  <?php if (!$tracks): ?><p class="music-empty">아직 등록된 음악이 없습니다.</p><?php endif; ?>
+  <div class="music-list">
   <?php foreach ($tracks as $track):
     $file = (string)($track['file'] ?? '');
     if (!preg_match('/^[a-f0-9]{32}\.(mp3|ogg|wav|m4a|webm)$/', $file)) continue;
+    $title = (string)($track['title'] ?? '제목 없음');
+    $artist = (string)($track['artist'] ?? '알 수 없음');
+    $created = substr((string)($track['created'] ?? ''), 0, 10);
+    $description = trim((string)($track['description'] ?? ''));
+    $ext = strtoupper((string)pathinfo($file, PATHINFO_EXTENSION));
   ?>
-    <article style="border:1px solid #425369;border-radius:12px;padding:18px;min-width:0">
-      <h3 style="margin:0 0 4px"><?= music_h((string)($track['title'] ?? '제목 없음')) ?></h3>
-      <div style="opacity:.7;font-size:14px">제작: <?= music_h((string)($track['artist'] ?? '')) ?> · <?= music_h(substr((string)($track['created'] ?? ''), 0, 10)) ?></div>
-      <?php if (!empty($track['description'])): ?><p style="white-space:pre-wrap"><?= music_h((string)$track['description']) ?></p><?php endif; ?>
-      <audio controls preload="none" style="display:block;width:100%;margin-top:14px" src="<?= music_h('/music/uploads/' . $file) ?>"></audio>
-      <?php if ($email !== '' && ($admin || strcasecmp($email, (string)($track['owner'] ?? '')) === 0)): ?>
-        <form method="post" onsubmit="return confirm('이 음악을 삭제할까요?')" style="margin-top:12px">
-          <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
-          <input type="hidden" name="action" value="delete">
-          <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
-          <button type="submit">삭제</button>
-        </form>
-      <?php endif; ?>
+    <article class="music-card">
+      <div class="music-thumb" aria-hidden="true">♪</div>
+      <div class="music-body">
+        <h3 class="music-title"><?= music_h($title) ?></h3>
+        <div class="music-meta">
+          <span>제작자 <?= music_h($artist) ?></span>
+          <span aria-hidden="true">·</span>
+          <span><?= music_h($created) ?></span>
+        </div>
+        <div class="music-badges">
+          <span class="music-badge">공개 음악</span>
+          <span class="music-badge"><?= music_h($ext) ?></span>
+        </div>
+        <?php if ($description !== ''): ?>
+          <p class="music-description"><?= music_h($description) ?></p>
+        <?php endif; ?>
+        <div class="music-player-wrap">
+          <audio class="music-player" controls preload="metadata" src="<?= music_h('/music/uploads/' . $file) ?>"></audio>
+        </div>
+        <?php if ($email !== '' && ($admin || strcasecmp($email, (string)($track['owner'] ?? '')) === 0)): ?>
+          <form method="post" class="music-actions" onsubmit="return confirm('이 음악을 삭제할까요?')">
+            <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
+            <button type="submit" class="button secondary">삭제</button>
+          </form>
+        <?php endif; ?>
+      </div>
     </article>
   <?php endforeach; ?>
   </div>
