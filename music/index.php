@@ -128,17 +128,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('제목·제작자·소개를 확인해 주세요.');
             }
             if ($artist === '') $artist = explode('@', $email)[0];
-            music_mutate($dataDir, $indexFile, $prefix, function (&$tracks) use ($id, $email, $admin, $title, $artist, $description): void {
-                foreach ($tracks as &$track) {
-                    if (($track['id'] ?? '') !== $id) continue;
-                    if (!$admin && strcasecmp((string)($track['owner'] ?? ''), $email) !== 0) throw new RuntimeException('본인 음악만 수정할 수 있습니다.');
-                    $track['title'] = $title;
-                    $track['artist'] = $artist;
-                    $track['description'] = $description;
-                    return;
-                }
-                throw new RuntimeException('음악을 찾을 수 없습니다.');
-            });
+            // Check ownership before accepting the optional replacement image.
+            $allowed = false;
+            foreach (music_read($indexFile, $prefix) as $track) {
+                if (($track['id'] ?? '') !== $id) continue;
+                if (!$admin && strcasecmp((string)($track['owner'] ?? ''), $email) !== 0) throw new RuntimeException('본인 음악만 수정할 수 있습니다.');
+                $allowed = true;
+                break;
+            }
+            if (!$allowed) throw new RuntimeException('음악을 찾을 수 없습니다.');
+            $cover = music_save_cover((array)($_FILES['cover'] ?? []), $audioDir, $id);
+            $oldCover = '';
+            try {
+                music_mutate($dataDir, $indexFile, $prefix, function (&$tracks) use ($id, $email, $admin, $title, $artist, $description, $cover, &$oldCover): void {
+                    foreach ($tracks as &$track) {
+                        if (($track['id'] ?? '') !== $id) continue;
+                        if (!$admin && strcasecmp((string)($track['owner'] ?? ''), $email) !== 0) throw new RuntimeException('본인 음악만 수정할 수 있습니다.');
+                        $track['title'] = $title;
+                        $track['artist'] = $artist;
+                        $track['description'] = $description;
+                        if ($cover !== '') {
+                            $oldCover = (string)($track['cover'] ?? '');
+                            $track['cover'] = $cover;
+                        }
+                        return;
+                    }
+                    throw new RuntimeException('음악을 찾을 수 없습니다.');
+                });
+            } catch (Throwable $e) {
+                if ($cover !== '') @unlink($audioDir . '/' . $cover);
+                throw $e;
+            }
+            if ($cover !== '' && preg_match('/^[a-f0-9]{32}-cover-[a-f0-9]{12}\\.(jpg|png|webp)$/', $oldCover)) @unlink($audioDir . '/' . $oldCover);
             header('Location: /music/#music-' . $id, true, 303);
             exit;
         } elseif ($action === 'cover') {
@@ -412,13 +433,6 @@ require dirname(__DIR__) . '/includes/header.php';
           <?php endif; ?>
         </section>
         <?php if ($email !== '' && ($admin || strcasecmp($email, (string)($track['owner'] ?? '')) === 0)): ?>
-          <form method="post" enctype="multipart/form-data" class="music-cover-form">
-            <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
-            <input type="hidden" name="action" value="cover">
-            <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
-            <label>프로필 사진 변경 (원본 5MB 이하 · 자동 압축)<input type="file" name="cover" accept="image/jpeg,image/png,image/webp" required></label>
-            <button type="submit" class="button secondary">사진 저장</button>
-          </form>
           <div class="music-manage-actions">
           <form method="post" class="music-actions" onsubmit="return confirm('이 음악을 삭제할까요?')">
             <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
@@ -428,13 +442,14 @@ require dirname(__DIR__) . '/includes/header.php';
           </form>
           <details class="music-edit-panel">
             <summary class="button secondary">수정</summary>
-            <form method="post" class="music-edit-form">
+            <form method="post" enctype="multipart/form-data" class="music-edit-form">
               <input type="hidden" name="csrf" value="<?= music_h(gamelab_csrf_token()) ?>">
               <input type="hidden" name="action" value="edit">
               <input type="hidden" name="id" value="<?= music_h((string)$track['id']) ?>">
               <label>제목<input type="text" name="title" maxlength="100" required value="<?= music_h($title) ?>"></label>
               <label>제작자<input type="text" name="artist" maxlength="80" value="<?= music_h($artist) ?>"></label>
               <label>소개<textarea name="description" maxlength="500" rows="3"><?= music_h($description) ?></textarea></label>
+              <label>프로필 사진 변경 (선택 · 원본 5MB 이하 · 자동 압축)<input type="file" name="cover" accept="image/jpeg,image/png,image/webp"></label>
               <button type="submit" class="button primary">수정 저장</button>
             </form>
           </details>
