@@ -177,8 +177,8 @@ require dirname(__DIR__) . '/includes/header.php';
 .app-play-qr .app-play-qr-code img,
 .app-play-qr .app-play-qr-code canvas {
     display: block;
-    width: 128px;
-    height: 128px;
+    width: 114px;
+    height: 114px;
     padding: 0;
     box-sizing: border-box;
     background: #fff;
