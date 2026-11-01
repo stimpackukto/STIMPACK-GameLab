@@ -6,6 +6,7 @@
 # 사용자 업로드 / 생성 데이터
 uploads/
 data/catalog/
+data/cache/
 
 # 임시 / 로그
 temp/
