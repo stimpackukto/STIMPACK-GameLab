@@ -21,15 +21,25 @@ function catalog_load(string $type): array
         return [];
     }
 
-    $raw = file_get_contents($file);
-
-    if ($raw === false || trim($raw) === '') {
-        return [];
+    // PHP-FPM APCu cache; invalidates as soon as catalog file changes.
+    clearstatcache(true, $file);
+    $mtime = (int)(filemtime($file) ?: 0);
+    $size = (int)(filesize($file) ?: 0);
+    $cacheKey = 'gamelab.catalog.v1.' . hash('sha256', $file . ':' . $mtime . ':' . $size);
+    if (function_exists('apcu_fetch') && filter_var(ini_get('apc.enabled'), FILTER_VALIDATE_BOOLEAN)) {
+        $hit = false;
+        $cached = apcu_fetch($cacheKey, $hit);
+        if ($hit && is_array($cached)) return $cached;
     }
 
+    $raw = file_get_contents($file);
+    if ($raw === false || trim($raw) === '') return [];
     $data = json_decode($raw, true);
-
-    return is_array($data) ? $data : [];
+    $items = is_array($data) ? $data : [];
+    if (function_exists('apcu_store') && filter_var(ini_get('apc.enabled'), FILTER_VALIDATE_BOOLEAN)) {
+        apcu_store($cacheKey, $items, 300);
+    }
+    return $items;
 }
 
 function catalog_add(string $type, array $item): void
