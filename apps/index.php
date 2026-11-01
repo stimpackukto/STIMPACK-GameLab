@@ -148,6 +148,46 @@ require dirname(__DIR__) . '/includes/header.php';
 }
 
 
+/* Google Play QR: 상세 카드 우측 상단 */
+.project-row.app-with-play-qr { position: relative; padding-right: 174px; }
+.app-play-qr {
+    position: absolute;
+    right: 20px;
+    top: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    width: 128px;
+    text-decoration: none;
+    color: #a9c7db;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+}
+.app-play-qr img {
+    display: block;
+    width: 128px;
+    height: 128px;
+    padding: 7px;
+    box-sizing: border-box;
+    background: #fff;
+    border-radius: 9px;
+    object-fit: contain;
+}
+@media (max-width: 850px) {
+    .project-row.app-with-play-qr { padding-right: 18px; }
+    .app-play-qr {
+        position: static;
+        grid-column: 2;
+        width: 128px;
+        margin-top: 10px;
+    }
+}
+@media (max-width: 700px) {
+    .app-play-qr { grid-column: 1; }
+}
+
 /* =========================================================
  * 상태 뱃지
  * ========================================================= */
@@ -905,6 +945,10 @@ require dirname(__DIR__) . '/includes/header.php';
         )
     );
 
+    $hasPlayQr = filter_var($playUrl, FILTER_VALIDATE_URL)
+        && strtolower((string)parse_url($playUrl, PHP_URL_HOST)) === 'play.google.com'
+        && (string)parse_url($playUrl, PHP_URL_PATH) === '/store/apps/details';
+
     $webUrl = trim((string)($app['web_url'] ?? ''));
     $hasWebUrl = $webUrl !== '' && catalog_valid_url($webUrl);
 
@@ -915,7 +959,7 @@ require dirname(__DIR__) . '/includes/header.php';
         id="<?= e(
             $contentId ?: 'app'
         ) ?>"
-        class="project-row"
+        class="project-row<?= $hasPlayQr ? ' app-with-play-qr' : '' ?>"
     >
 
 
@@ -934,6 +978,22 @@ require dirname(__DIR__) . '/includes/header.php';
             loading="lazy"
         >
 
+
+        <?php if ($hasPlayQr): ?>
+            <a class="app-play-qr"
+               href="<?= e($playUrl) ?>"
+               target="_blank"
+               rel="noopener noreferrer"
+               aria-label="<?= e((string)($app['title'] ?? '앱')) ?> Google Play 열기">
+                <img
+                    src="https://api.qrserver.com/v1/create-qr-code/?size=256x256&amp;margin=0&amp;data=<?= rawurlencode($playUrl) ?>"
+                    alt="Google Play QR 코드"
+                    loading="lazy"
+                    width="128"
+                    height="128">
+                <span>Google Play QR</span>
+            </a>
+        <?php endif; ?>
 
         <div class="project-body">
 
