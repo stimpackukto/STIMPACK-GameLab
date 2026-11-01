@@ -40,7 +40,7 @@ function gamelab_home_cache_serve(): bool
     $file = gamelab_home_cache_file();
     if (!is_file($file) || (time() - (int)filemtime($file)) >= 60) return false;
     $html = @file_get_contents($file);
-    if (!is_string($html) || !str_ends_with($html, '</html>')) return false;
+    if (!is_string($html) || !str_ends_with(rtrim($html), '</html>')) return false;
     header('Content-Type: text/html; charset=utf-8');
     header('Cache-Control: private, no-store');
     header('X-GameLab-Home-Cache: HIT');
