@@ -165,7 +165,7 @@ require dirname(__DIR__) . '/includes/header.php';
     font-weight: 700;
     text-align: center;
 }
-.app-play-qr img {
+.app-play-qr .app-play-qr-code {
     display: block;
     width: 128px;
     height: 128px;
@@ -173,6 +173,16 @@ require dirname(__DIR__) . '/includes/header.php';
     box-sizing: border-box;
     background: #fff;
     border-radius: 9px;
+}
+.app-play-qr .app-play-qr-code img,
+.app-play-qr .app-play-qr-code canvas {
+    display: block;
+    width: 128px;
+    height: 128px;
+    padding: 0;
+    box-sizing: border-box;
+    background: #fff;
+    border-radius: 0;
     object-fit: contain;
 }
 @media (max-width: 850px) {
@@ -985,12 +995,10 @@ require dirname(__DIR__) . '/includes/header.php';
                target="_blank"
                rel="noopener noreferrer"
                aria-label="<?= e((string)($app['title'] ?? '앱')) ?> Google Play 열기">
-                <img
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=256x256&amp;margin=0&amp;data=<?= rawurlencode($playUrl) ?>"
-                    alt="Google Play QR 코드"
-                    loading="lazy"
-                    width="128"
-                    height="128">
+                <span class="app-play-qr-code"
+                      data-qr-url="<?= e($playUrl) ?>"
+                      role="img"
+                      aria-label="Google Play QR 코드"></span>
                 <span>Google Play QR</span>
             </a>
         <?php endif; ?>
@@ -1607,6 +1615,37 @@ require dirname(__DIR__) . '/includes/header.php';
 </section>
 
 
+<script src="/assets/js/vendor/qrcode.min.js" defer></script>
+<script>
+/* 화면 가까이에 있는 앱만 QR 생성: 외부 네트워크 요청 없음 */
+document.addEventListener('DOMContentLoaded', function () {
+    var targets = document.querySelectorAll('.app-play-qr-code[data-qr-url]');
+    if (!targets.length || typeof QRCode !== 'function') return;
+
+    function render(target) {
+        if (target.dataset.qrRendered) return;
+        target.dataset.qrRendered = '1';
+        new QRCode(target, {
+            text: target.dataset.qrUrl,
+            width: 114,
+            height: 114,
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    }
+    if ('IntersectionObserver' in window) {
+        var observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (!entry.isIntersecting) return;
+                render(entry.target);
+                observer.unobserve(entry.target);
+            });
+        }, { rootMargin: '250px' });
+        targets.forEach(function (target) { observer.observe(target); });
+    } else {
+        targets.forEach(render);
+    }
+});
+</script>
 <script>
 
 /* =========================================================
