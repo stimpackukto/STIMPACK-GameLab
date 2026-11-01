@@ -1,6 +1,12 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/includes/home_cache.php';
+if (gamelab_home_cache_serve()) {
+    exit;
+}
+gamelab_home_cache_begin();
+
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/data.php';
 require_once __DIR__ . '/includes/db.php';
