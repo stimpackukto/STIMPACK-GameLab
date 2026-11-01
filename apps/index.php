@@ -955,6 +955,9 @@ require dirname(__DIR__) . '/includes/header.php';
         )
     );
 
+    $qrImagePath = '/assets/images/qrcodes/' . hash('sha256', $contentId . "\n" . $playUrl) . '.png';
+    $qrImageExists = is_file(dirname(__DIR__) . $qrImagePath);
+
     $hasPlayQr = filter_var($playUrl, FILTER_VALIDATE_URL)
         && strtolower((string)parse_url($playUrl, PHP_URL_HOST)) === 'play.google.com'
         && (string)parse_url($playUrl, PHP_URL_PATH) === '/store/apps/details';
@@ -997,8 +1000,9 @@ require dirname(__DIR__) . '/includes/header.php';
                aria-label="<?= e((string)($app['title'] ?? '앱')) ?> Google Play 열기">
                 <span class="app-play-qr-code"
                       data-qr-url="<?= e($playUrl) ?>"
+                      data-qr-id="<?= e($contentId) ?>"
                       role="img"
-                      aria-label="Google Play QR 코드"></span>
+                      aria-label="Google Play QR 코드"><?php if ($qrImageExists): ?><img src="<?= e($qrImagePath) ?>" alt="Google Play QR 코드" loading="lazy" width="114" height="114"><?php endif; ?></span>
                 <span>Google Play QR</span>
             </a>
         <?php endif; ?>
@@ -1625,12 +1629,34 @@ document.addEventListener('DOMContentLoaded', function () {
     function render(target) {
         if (target.dataset.qrRendered) return;
         target.dataset.qrRendered = '1';
+        if (target.querySelector('img')) return; // Cached server PNG: zero QR generation
         new QRCode(target, {
             text: target.dataset.qrUrl,
             width: 114,
             height: 114,
             correctLevel: QRCode.CorrectLevel.M
         });
+        <?php if ($isGameLabAdmin): ?>
+        // Only authenticated admins can seed the shared image cache.
+        // No extra server calls are made by ordinary visitors.
+        var qrImage = target.querySelector('img');
+        var qrCanvas = target.querySelector('canvas');
+        var png = qrImage && qrImage.src.indexOf('data:image/png;base64,') === 0
+            ? qrImage.src
+            : (qrCanvas ? qrCanvas.toDataURL('image/png') : '');
+        if (png) {
+            var payload = new FormData();
+            payload.append('csrf', <?= json_encode(gamelab_csrf_token()) ?>);
+            payload.append('id', target.dataset.qrId);
+            payload.append('png', png);
+            fetch('/api/cache_play_qr.php', {
+                method: 'POST',
+                body: payload,
+                credentials: 'same-origin',
+                keepalive: false
+            }).catch(function () { /* QR still works in the browser */ });
+        }
+        <?php endif; ?>
     }
     if ('IntersectionObserver' in window) {
         var observer = new IntersectionObserver(function (entries) {
