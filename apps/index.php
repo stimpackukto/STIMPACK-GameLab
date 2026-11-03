@@ -969,7 +969,7 @@ require dirname(__DIR__) . '/includes/header.php';
     // Never show a broken download link or mistake beta for a Play release.
     $downloadUrl = trim((string)($app['download_url'] ?? ''));
     $hasBetaDownload = preg_match(
-        '#^/app/[a-zA-Z0-9_-]+/releases/[a-zA-Z0-9_.-]+\\.apk$#D',
+        '#^/app/[a-zA-Z0-9_-]+/releases/[a-zA-Z0-9_.-]+\.apk$#D',
         $downloadUrl
     ) === 1 && is_file(dirname(__DIR__) . $downloadUrl);
 
