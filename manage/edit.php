@@ -387,6 +387,11 @@ if (
                 'web_url' =>
                     $formWebUrl,
 
+                // Preserve CLI-seeded beta download URL when editing metadata.
+                // Do not accidentally erase it just because it is not a form field.
+                'download_url' =>
+                    trim((string)($current['download_url'] ?? '')),
+
                 'action' =>
                     '자세히 보기',
 
