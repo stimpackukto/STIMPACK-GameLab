@@ -965,6 +965,14 @@ require dirname(__DIR__) . '/includes/header.php';
     $webUrl = trim((string)($app['web_url'] ?? ''));
     $hasWebUrl = $webUrl !== '' && catalog_valid_url($webUrl);
 
+    // Serve beta APKs only from an existing local release file.
+    // Never show a broken download link or mistake beta for a Play release.
+    $downloadUrl = trim((string)($app['download_url'] ?? ''));
+    $hasBetaDownload = preg_match(
+        '#^/app/[a-zA-Z0-9_-]+/releases/[a-zA-Z0-9_.-]+\\.apk$#D',
+        $downloadUrl
+    ) === 1 && is_file(dirname(__DIR__) . $downloadUrl);
+
     ?>
 
 
@@ -1166,6 +1174,16 @@ require dirname(__DIR__) . '/includes/header.php';
                     자세히 보기
 
                 </button>
+
+
+                <?php if ($hasBetaDownload): ?>
+                    <a
+                        class="button secondary"
+                        href="<?= e($downloadUrl) ?>"
+                        download
+                        aria-label="<?= e((string)($app['title'] ?? '앱')) ?> Android 베타 APK 다운로드"
+                    >베타 APK 다운로드</a>
+                <?php endif; ?>
 
 
                 <!-- =========================================
