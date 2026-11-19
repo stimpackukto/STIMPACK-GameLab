@@ -653,7 +653,7 @@ try {
 // Redirect only to an explicitly approved same-origin path.
 $afterLogin = (string) ($_SESSION['google_login_return'] ?? '/');
 unset($_SESSION['google_login_return']);
-if (!in_array($afterLogin, ['/housingstudy/', '/games/baduk/'], true)) {
+if (!in_array($afterLogin, ['/housingstudy/', '/games/Baduk/'], true)) {
     $afterLogin = '/';
 }
 header('Location: ' . $afterLogin);
