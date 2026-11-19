@@ -20,7 +20,7 @@ $_SESSION['google_oauth_state'] = $state;
 // Never accept arbitrary domains or paths supplied by a login URL.
 $afterLogin = (string) ($_GET['return'] ?? '');
 $_SESSION['google_login_return'] =
-    $afterLogin === '/housingstudy/' ? '/housingstudy/' : '/';
+    in_array($afterLogin, ['/housingstudy/', '/games/baduk/'], true) ? $afterLogin : '/';
 
 
 $params = [
