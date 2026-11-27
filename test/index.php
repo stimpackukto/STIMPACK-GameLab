@@ -217,7 +217,7 @@ require dirname(__DIR__) . '/includes/header.php';
 .devtest-card p{white-space:pre-line;color:#b1c8d9;margin:12px 0;overflow-wrap:anywhere}
 .devtest-card .devtest-description{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;margin:12px 0 0}
 .devtest-card .devtest-description.is-expanded{white-space:pre-line;overflow:visible;text-overflow:clip}
-.devtest-card-toolbar{display:flex;align-items:center;flex-wrap:nowrap;gap:9px;margin-top:16px;clear:both;overflow-x:auto;padding-bottom:5px}
+.devtest-card-toolbar{display:flex;align-items:center;flex-wrap:nowrap;gap:9px;margin-top:8px;overflow-x:auto;padding-bottom:5px}
 .devtest-card-toolbar>*{flex:0 0 auto}
 .devtest-card-toolbar .devtest-button{white-space:nowrap}
 .devtest-card-toolbar form{display:inline-flex;margin:0}
