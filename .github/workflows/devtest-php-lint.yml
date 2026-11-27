@@ -1,0 +1,34 @@
+name: Development test PHP syntax
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'test/**'
+      - 'includes/devtest.php'
+      - 'auth/google_login.php'
+      - 'auth/google_callback.php'
+      - '.github/workflows/devtest-php-lint.yml'
+  pull_request:
+    paths:
+      - 'test/**'
+      - 'includes/devtest.php'
+      - 'auth/google_login.php'
+      - 'auth/google_callback.php'
+
+permissions:
+  contents: read
+
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: PHP syntax validation
+        run: |
+          php -v
+          php -l test/index.php
+          php -l includes/devtest.php
+          php -l auth/google_login.php
+          php -l auth/google_callback.php
