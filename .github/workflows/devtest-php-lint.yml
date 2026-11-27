@@ -6,6 +6,7 @@ on:
     paths:
       - 'test/**'
       - 'includes/devtest.php'
+      - 'includes/devtest_mail.php'
       - 'auth/google_login.php'
       - 'auth/google_callback.php'
       - '.github/workflows/devtest-php-lint.yml'
@@ -13,6 +14,7 @@ on:
     paths:
       - 'test/**'
       - 'includes/devtest.php'
+      - 'includes/devtest_mail.php'
       - 'auth/google_login.php'
       - 'auth/google_callback.php'
 
@@ -30,5 +32,6 @@ jobs:
           php -v
           php -l test/index.php
           php -l includes/devtest.php
+          php -l includes/devtest_mail.php
           php -l auth/google_login.php
           php -l auth/google_callback.php
