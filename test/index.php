@@ -1,0 +1,339 @@
+<?php
+declare(strict_types=1);
+
+require_once dirname(__DIR__) . '/includes/config.php';
+require_once dirname(__DIR__) . '/includes/admin.php';
+require_once dirname(__DIR__) . '/includes/devtest.php';
+
+$pageTitle = '비공개 개발테스트';
+$viewer = gamelab_devtest_user();
+$validTabs = ['recruiting', 'testing', 'completed'];
+$tab = (string)($_GET['tab'] ?? 'recruiting');
+if (!in_array($tab, $validTabs, true)) {
+    $tab = 'recruiting';
+}
+$tabNames = ['recruiting' => '모집 중', 'testing' => '테스트 중', 'completed' => '완료'];
+$counts = ['recruiting' => 0, 'testing' => 0, 'completed' => 0];
+$projects = [];
+$active = null;
+$db = null;
+$databaseReady = true;
+$errorText = '';
+$noticeText = [
+    'created' => '앱이 모집 중 목록에 등록되었습니다.',
+    'edited' => '등록 정보가 수정되었습니다.',
+    'started' => '앱이 테스트 중 목록으로 이동했습니다.',
+    'completed' => '테스트 완료로 처리했습니다. 이제 새 앱을 등록할 수 있습니다.',
+][(string)($_GET['saved'] ?? '')] ?? '';
+
+$formMode = '';
+$formProjectId = 0;
+$formValues = ['title' => '', 'description' => '', 'recruited_count' => '0', 'target_count' => '12'];
+
+if ($viewer !== null) {
+    try {
+        $db = gamelab_db();
+        // The DB migration is performed on the server before this page is deployed.
+        $db->query('SELECT id FROM gamelab_devtest_projects LIMIT 0');
+        $db->query('SELECT owner_google_sub FROM gamelab_devtest_active_owners LIMIT 0');
+    } catch (Throwable $error) {
+        $databaseReady = false;
+        error_log('[GAME LAB DEVTEST] database initialization check failed: ' . $error->getMessage());
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($viewer === null) {
+        http_response_code(403);
+        exit('Google 로그인 후 사용할 수 있습니다.');
+    }
+    if (!$databaseReady || !($db instanceof PDO)) {
+        http_response_code(503);
+        exit('개발테스트 DB가 준비되지 않았습니다.');
+    }
+    if (!gamelab_verify_csrf((string)($_POST['csrf'] ?? ''))) {
+        http_response_code(403);
+        exit('요청이 만료되었습니다. 페이지를 새로고침해 주세요.');
+    }
+
+    $action = (string)($_POST['action'] ?? '');
+    $postTab = (string)($_POST['tab'] ?? 'recruiting');
+    if (in_array($postTab, $validTabs, true)) {
+        $tab = $postTab;
+    }
+
+    try {
+        if ($action === 'create') {
+            $formMode = 'create';
+            $formValues = [
+                'title' => (string)($_POST['title'] ?? ''),
+                'description' => (string)($_POST['description'] ?? ''),
+                'recruited_count' => (string)($_POST['recruited_count'] ?? ''),
+                'target_count' => (string)($_POST['target_count'] ?? ''),
+            ];
+            gamelab_devtest_create($db, $viewer, gamelab_devtest_form_values($_POST));
+            header('Location: /test/?tab=recruiting&saved=created#devtest-projects', true, 303);
+            exit;
+        }
+        $id = gamelab_devtest_number($_POST['project_id'] ?? '', '앱 ID', 1, 100000000);
+        if ($action === 'edit') {
+            $formMode = 'edit';
+            $formProjectId = $id;
+            $formValues = [
+                'title' => (string)($_POST['title'] ?? ''),
+                'description' => (string)($_POST['description'] ?? ''),
+                'recruited_count' => (string)($_POST['recruited_count'] ?? ''),
+                'target_count' => (string)($_POST['target_count'] ?? ''),
+            ];
+            gamelab_devtest_edit($db, $viewer, $id, gamelab_devtest_form_values($_POST));
+            header('Location: /test/?tab=' . rawurlencode($tab) . '&saved=edited#devtest-projects', true, 303);
+            exit;
+        }
+        if ($action === 'start') {
+            gamelab_devtest_transition($db, $viewer, $id, 'start');
+            header('Location: /test/?tab=testing&saved=started#devtest-projects', true, 303);
+            exit;
+        }
+        if ($action === 'complete') {
+            gamelab_devtest_transition($db, $viewer, $id, 'complete');
+            header('Location: /test/?tab=completed&saved=completed#devtest-projects', true, 303);
+            exit;
+        }
+        throw new RuntimeException('지원하지 않는 작업입니다.');
+    } catch (RuntimeException $error) {
+        $errorText = $error->getMessage();
+        http_response_code(422);
+    } catch (Throwable $error) {
+        error_log('[GAME LAB DEVTEST] POST error: ' . $error->getMessage());
+        $errorText = '처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+        http_response_code(500);
+    }
+}
+
+if ($viewer !== null && $databaseReady && $db instanceof PDO) {
+    try {
+        $counts = gamelab_devtest_counts($db);
+        $active = gamelab_devtest_active($db, $viewer['sub']);
+        $projects = gamelab_devtest_list($db, $tab);
+
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            if (isset($_GET['new']) && $active === null) {
+                $formMode = 'create';
+            }
+            if (isset($_GET['edit'])) {
+                $requestedId = gamelab_devtest_number($_GET['edit'], '앱 ID', 1, 100000000);
+                $project = gamelab_devtest_owned_project($db, $requestedId, $viewer['sub']);
+                if ($project['status'] === 'completed') {
+                    throw new RuntimeException('완료된 앱은 수정할 수 없습니다.');
+                }
+                $tab = (string)$project['status'];
+                $projects = gamelab_devtest_list($db, $tab);
+                $formMode = 'edit';
+                $formProjectId = $requestedId;
+                $formValues = [
+                    'title' => (string)$project['title'],
+                    'description' => (string)$project['description'],
+                    'recruited_count' => (string)$project['recruited_count'],
+                    'target_count' => (string)$project['target_count'],
+                ];
+            }
+        }
+    } catch (RuntimeException $error) {
+        $errorText = $error->getMessage();
+    } catch (Throwable $error) {
+        error_log('[GAME LAB DEVTEST] SELECT error: ' . $error->getMessage());
+        $databaseReady = false;
+        $errorText = '테스트 프로젝트를 불러오지 못했습니다.';
+    }
+}
+
+require dirname(__DIR__) . '/includes/header.php';
+?>
+<style>
+.devtest-hero{padding-top:52px;padding-bottom:48px}
+.devtest-hero .section-kicker{color:#a8caed;letter-spacing:1.7px}
+.devtest-hero h1{font-size:42px;line-height:1.25;margin:12px 0 18px}
+.devtest-intro{margin-bottom:24px}
+.devtest-tabs{margin-bottom:26px}
+.devtest-tab{position:relative;color:inherit}
+.devtest-tab.is-selected{border-color:#16b5fb;box-shadow:0 0 0 1px rgba(19,185,255,.2);background:#0d2a43}
+.devtest-tab .devtest-count{margin-left:auto;color:#8ed5ff;font-size:17px;font-weight:800;white-space:nowrap}
+.devtest-actions{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin:18px 0}
+.devtest-actions h2{font-size:26px;margin:0}
+.devtest-button{display:inline-flex;align-items:center;justify-content:center;padding:10px 17px;border:1px solid #258ed3;border-radius:9px;background:#0a3d62;color:white;font-weight:800;cursor:pointer;text-decoration:none;min-height:44px}
+.devtest-button:hover{background:#106195}
+.devtest-button.primary{background:#028be3;border-color:#029fe4;color:white}
+.devtest-button.complete{background:#167953;border-color:#239e70}
+.devtest-button.muted{background:#12283b;border-color:#2c5776}
+.devtest-card{padding:24px;border:1px solid #234d6d;border-radius:13px;background:linear-gradient(140deg,#0e263c,#091c2f);margin-bottom:14px}
+.devtest-card h3{font-size:22px;margin:4px 0 10px}
+.devtest-card p{white-space:pre-line;color:#b1c8d9;margin:12px 0;overflow-wrap:anywhere}
+.devtest-meta{display:flex;gap:9px 20px;flex-wrap:wrap;color:#86acc9;font-size:13px}
+.devtest-card-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}
+.devtest-note{font-size:13px;color:#98b9d1}
+.devtest-alert{padding:14px 17px;border-radius:10px;border:1px solid #a94a58;background:#321d2b;color:#ffdfe4;margin:0 0 18px}
+.devtest-success{padding:14px 17px;border-radius:10px;border:1px solid #267e61;background:#102d2a;color:#c8f9e5;margin:0 0 18px}
+.devtest-form{border:1px solid #2b648d;background:#0b2238;border-radius:14px;padding:24px;margin:22px 0}
+.devtest-form h3{font-size:23px;margin:0 0 18px}
+.devtest-field{display:flex;flex-direction:column;gap:7px;margin-bottom:17px}
+.devtest-field label{font-weight:750;color:#e2f0fa}
+.devtest-field input,.devtest-field textarea{display:block;width:100%;background:#061626;color:#fff;border:1px solid #356585;padding:12px;border-radius:9px;font:inherit}
+.devtest-field input:focus,.devtest-field textarea:focus{outline:2px solid #159bdd;outline-offset:1px}
+.devtest-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px}
+.devtest-empty{padding:28px;text-align:center;border:1px dashed #2b5572;border-radius:13px;color:#a3bbd0}
+.devtest-account{padding:17px 20px;background:#0b263c;border:1px solid #214e72;border-radius:12px;margin-bottom:18px}
+.devtest-account strong{color:#d8f1ff}
+@media(max-width:700px){
+  .devtest-hero h1{font-size:33px}
+  .devtest-form-grid{grid-template-columns:1fr;gap:0}
+  .devtest-tab .devtest-count{font-size:14px}
+  .devtest-card{padding:18px}
+  .devtest-actions h2{font-size:22px}
+}
+</style>
+
+<section class="subhero devtest-hero">
+    <div class="container">
+        <p class="section-kicker">PRIVATE DEVELOPMENT TEST</p>
+        <h1>비공개 개발테스트</h1>
+        <p>STIMPACK GAME LAB 자체 테스트 프로젝트를 등록하고, 모집부터 완료까지 관리합니다.</p>
+    </div>
+</section>
+
+<section class="section">
+<div class="container">
+    <div class="notice-box devtest-intro">
+        <b>STIMPACK GAME LAB 개발테스트 센터</b>
+        <p>구글 로그인 사용자만 앱을 등록하고 관리할 수 있습니다. 모집 중인 앱은 소유자가 테스트 중으로 옮기고, 테스트를 마친 뒤 완료 처리할 수 있습니다.</p>
+        <p class="devtest-note">Google Play의 테스트 참여·설치·평점·리뷰 및 보상과는 연동하지 않는 홈페이지 자체 관리 기능입니다.</p>
+    </div>
+
+    <nav class="simple-card-grid three devtest-tabs" aria-label="개발테스트 단계">
+        <?php foreach ([
+            'recruiting' => ['👥', '모집 중', '테스터 모집 프로젝트'],
+            'testing' => ['🧪', '테스트 중', '진행 중인 테스트 프로젝트'],
+            'completed' => ['🏁', '완료', '완료된 프로젝트 기록'],
+        ] as $key => $item): ?>
+            <a class="simple-card devtest-tab<?= $tab === $key ? ' is-selected' : '' ?>"
+               href="/test/?tab=<?= e($key) ?>#devtest-projects"
+               <?= $tab === $key ? 'aria-current="page"' : '' ?>>
+                <span class="simple-icon" aria-hidden="true"><?= e($item[0]) ?></span>
+                <div><b><?= e($item[1]) ?></b><p><?= e($item[2]) ?></p></div>
+                <span class="devtest-count"><?= number_format($counts[$key]) ?></span>
+            </a>
+        <?php endforeach; ?>
+    </nav>
+
+    <?php if ($viewer === null): ?>
+        <div class="notice-box">
+            <b>Google 로그인 후 이용할 수 있습니다.</b>
+            <p>앱 등록, 프로젝트 조회, 모집 인원 수정과 상태 변경은 구글 인증 사용자에게만 제공됩니다.</p>
+            <a class="devtest-button primary" href="/auth/google_login.php?return=%2Ftest%2F">Google 로그인</a>
+        </div>
+    <?php elseif (!$databaseReady): ?>
+        <div class="devtest-alert" role="alert">
+            개발테스트 DB가 준비되지 않았습니다. 관리자는 sql/20261127_devtest_projects.sql 설치 여부를 확인해 주세요.
+        </div>
+    <?php else: ?>
+        <div id="devtest-projects"></div>
+        <?php if ($noticeText !== ''): ?><div class="devtest-success" role="status"><?= e($noticeText) ?></div><?php endif; ?>
+        <?php if ($errorText !== ''): ?><div class="devtest-alert" role="alert"><?= e($errorText) ?></div><?php endif; ?>
+
+        <?php if ($active !== null): ?>
+            <div class="devtest-account">
+                <strong>내 진행 중인 앱: <?= e((string)$active['title']) ?></strong>
+                <div class="devtest-note">현재 상태: <?= e($tabNames[(string)$active['status']] ?? '') ?> · 이 앱이 완료 처리되면 새 앱을 등록할 수 있습니다.</div>
+            </div>
+        <?php endif; ?>
+
+        <div class="devtest-actions">
+            <h2><?= e($tabNames[$tab]) ?> <small style="font-size:15px;color:#80accb;">(<?= number_format($counts[$tab]) ?>)</small></h2>
+            <?php if ($tab === 'recruiting' && $active === null && $formMode !== 'create'): ?>
+                <a class="devtest-button primary" href="/test/?tab=recruiting&new=1#project-form">+ 앱 등록</a>
+            <?php endif; ?>
+        </div>
+        <?php if ($tab === 'recruiting'): ?>
+            <p class="devtest-note">현재 모집 인원은 앱 등록자가 입력하고 관리하는 숫자입니다. 실제 계정 참여 자동 집계 기능은 아직 포함하지 않았습니다.</p>
+        <?php endif; ?>
+
+        <?php if ($formMode !== ''): ?>
+            <div class="devtest-form" id="project-form">
+                <h3><?= $formMode === 'edit' ? '앱 정보 수정' : '모집할 앱 등록' ?></h3>
+                <form method="post" action="/test/?tab=<?= e($tab) ?>#project-form">
+                    <input type="hidden" name="csrf" value="<?= e(gamelab_csrf_token()) ?>">
+                    <input type="hidden" name="action" value="<?= e($formMode) ?>">
+                    <input type="hidden" name="tab" value="<?= e($tab) ?>">
+                    <?php if ($formMode === 'edit'): ?>
+                        <input type="hidden" name="project_id" value="<?= $formProjectId ?>">
+                    <?php endif; ?>
+                    <div class="devtest-field">
+                        <label for="devtest-title">앱 이름</label>
+                        <input id="devtest-title" name="title" type="text" required minlength="2" maxlength="100" value="<?= e((string)$formValues['title']) ?>" placeholder="예: 내 진료수첩">
+                    </div>
+                    <div class="devtest-field">
+                        <label for="devtest-description">앱 설명 및 테스트 목적</label>
+                        <textarea id="devtest-description" name="description" required minlength="10" maxlength="2500" rows="5" placeholder="앱의 기능과 어떤 점을 테스트하고 싶은지 적어 주세요."><?= e((string)$formValues['description']) ?></textarea>
+                    </div>
+                    <div class="devtest-form-grid">
+                        <div class="devtest-field">
+                            <label for="devtest-recruited">현재 모집 완료 인원</label>
+                            <input id="devtest-recruited" name="recruited_count" type="number" min="0" max="100000" required value="<?= e((string)$formValues['recruited_count']) ?>">
+                        </div>
+                        <div class="devtest-field">
+                            <label for="devtest-target">목표 모집 인원</label>
+                            <input id="devtest-target" name="target_count" type="number" min="1" max="100000" required value="<?= e((string)$formValues['target_count']) ?>">
+                        </div>
+                    </div>
+                    <div class="devtest-card-actions">
+                        <button class="devtest-button primary" type="submit"><?= $formMode === 'edit' ? '수정 저장' : '모집 중에 등록' ?></button>
+                        <a class="devtest-button muted" href="/test/?tab=<?= e($tab) ?>#devtest-projects">취소</a>
+                    </div>
+                </form>
+            </div>
+        <?php endif; ?>
+
+        <?php if (!$projects): ?>
+            <div class="devtest-empty">현재 <?= e($tabNames[$tab]) ?> 앱이 없습니다.</div>
+        <?php else: ?>
+            <?php foreach ($projects as $project): ?>
+                <article class="devtest-card">
+                    <h3><?= e((string)$project['title']) ?></h3>
+                    <div class="devtest-meta">
+                        <span>현재 모집 <?= number_format((int)$project['recruited_count']) ?>명 / 목표 <?= number_format((int)$project['target_count']) ?>명</span>
+                        <span>등록일 <?= e(substr((string)$project['created_at'], 0, 10)) ?></span>
+                        <?php if ($project['started_at'] !== null): ?>
+                            <span>테스트 시작 <?= e(substr((string)$project['started_at'], 0, 10)) ?></span>
+                        <?php endif; ?>
+                        <?php if ($project['completed_at'] !== null): ?>
+                            <span>완료일 <?= e(substr((string)$project['completed_at'], 0, 10)) ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <p><?= e((string)$project['description']) ?></p>
+                    <?php if (hash_equals((string)$project['owner_google_sub'], $viewer['sub']) && $project['status'] !== 'completed'): ?>
+                        <div class="devtest-card-actions">
+                            <a class="devtest-button muted"
+                                href="/test/?tab=<?= e($tab) ?>&edit=<?= (int)$project['id'] ?>#project-form">정보·모집 인원 수정</a>
+                            <?php if ($project['status'] === 'recruiting'): ?>
+                                <form method="post" action="/test/">
+                                    <input type="hidden" name="csrf" value="<?= e(gamelab_csrf_token()) ?>">
+                                    <input type="hidden" name="action" value="start">
+                                    <input type="hidden" name="project_id" value="<?= (int)$project['id'] ?>">
+                                    <button class="devtest-button primary" type="submit">테스트 진행</button>
+                                </form>
+                            <?php elseif ($project['status'] === 'testing'): ?>
+                                <form method="post" action="/test/" onsubmit="return confirm('테스트를 완료 처리할까요? 완료 후에는 수정할 수 없습니다.');">
+                                    <input type="hidden" name="csrf" value="<?= e(gamelab_csrf_token()) ?>">
+                                    <input type="hidden" name="action" value="complete">
+                                    <input type="hidden" name="project_id" value="<?= (int)$project['id'] ?>">
+                                    <button class="devtest-button complete" type="submit">완료</button>
+                                </form>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                </article>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    <?php endif; ?>
+</div>
+</section>
+<?php require dirname(__DIR__) . '/includes/footer.php'; ?>
