@@ -354,15 +354,6 @@ function gamelab_devtest_join(PDO $db, array $viewer, int $projectId, string $ap
             throw new RuntimeException('앱 등록자의 인증 이메일을 확인할 수 없습니다.');
         }
 
-        $limit = $db->prepare('
-            SELECT COUNT(*) FROM gamelab_devtest_applications
-            WHERE applicant_google_sub = ? AND requested_at >= NOW() - INTERVAL 1 DAY
-        ');
-        $limit->execute([$viewer['sub']]);
-        if ((int)$limit->fetchColumn() >= 5) {
-            throw new RuntimeException('하루에 최대 5개 앱에만 참여 신청할 수 있습니다.');
-        }
-
         $insert = $db->prepare('
             INSERT INTO gamelab_devtest_applications
                 (project_id, applicant_google_sub, applicant_email)
