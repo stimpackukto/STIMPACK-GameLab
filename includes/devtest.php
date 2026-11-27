@@ -394,8 +394,22 @@ function gamelab_devtest_join(PDO $db, array $viewer, int $projectId, string $ap
         'Content-Type: text/plain; charset=UTF-8',
         'From: STIMPACK GAME LAB <noreply@stimpack.pe.kr>',
     ]);
-    $queued = @mail($recipient, $subject, $body, $headers);
+    // PHP mail() may accept a message that is later bounced by the local MTA.
+    // Capture transport-level PHP warnings to aid server-side diagnosis.
+    $mailWarning = '';
+    set_error_handler(static function (int $severity, string $message) use (&$mailWarning): bool {
+        $mailWarning = $message;
+        return true;
+    }, E_WARNING);
+    try {
+        $queued = mail($recipient, $subject, $body, $headers);
+    } finally {
+        restore_error_handler();
+    }
     if (!$queued) {
+        error_log('[GAME LAB DEVTEST] PHP mail() rejected project #' . $projectId
+            . ' application #' . $applicationId
+            . ($mailWarning !== '' ? ' reason: ' . $mailWarning : ' reason: mail() returned false'));
         // Permit an explicit retry if the local mail transport rejected it.
         try {
             $remove = $db->prepare('
