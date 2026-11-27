@@ -7,16 +7,6 @@ require_once dirname(__DIR__) . '/includes/devtest.php';
 
 $pageTitle = '비공개 개발테스트';
 $viewer = gamelab_devtest_user();
-// Resume an emailed owner confirmation after the existing Google OAuth flow.
-// The actual action still needs an explicit owner-only POST on /test/confirm.php.
-if ($viewer !== null && isset($_SESSION['devtest_owner_confirm_pending'])) {
-    $pendingId = (int)$_SESSION['devtest_owner_confirm_pending'];
-    unset($_SESSION['devtest_owner_confirm_pending']);
-    if ($pendingId > 0) {
-        header('Location: /test/confirm.php?application_id=' . $pendingId, true, 303);
-        exit;
-    }
-}
 $validTabs = ['recruiting', 'testing', 'completed'];
 $tab = (string)($_GET['tab'] ?? 'recruiting');
 if (!in_array($tab, $validTabs, true)) {
@@ -48,7 +38,7 @@ if ($viewer !== null) {
         // The DB migration is performed on the server before this page is deployed.
         $db->query('SELECT id, contact_email, image_path, video_url, play_url FROM gamelab_devtest_projects LIMIT 0');
         $db->query('SELECT owner_google_sub FROM gamelab_devtest_active_owners LIMIT 0');
-        $db->query('SELECT id, owner_confirmed_at FROM gamelab_devtest_applications LIMIT 0');
+        $db->query('SELECT id, owner_confirmed_at, owner_confirm_token_hash FROM gamelab_devtest_applications LIMIT 0');
     } catch (Throwable $error) {
         $databaseReady = false;
         error_log('[GAME LAB DEVTEST] database initialization check failed: ' . $error->getMessage());
