@@ -383,7 +383,7 @@ require dirname(__DIR__) . '/includes/header.php';
             <div class="devtest-empty">현재 <?= e($tabNames[$tab]) ?> 앱이 없습니다.</div>
         <?php else: ?>
             <?php foreach ($projects as $project): ?>
-                <article class="devtest-card">
+                <article class="devtest-card" id="devtest-project-<?= (int)$project['id'] ?>">
                     <?php if (!empty($project['image_path'])): ?>
                         <img class="devtest-cover" src="<?= e((string)$project['image_path']) ?>" alt="<?= e((string)$project['title']) ?> 대표 이미지" loading="lazy">
                     <?php endif; ?>
