@@ -1,6 +1,15 @@
 <?php
 declare(strict_types=1);
 
+/**
+ * Public game launch attempts. No Google login, account or cookie required.
+ *
+ * Each click is recorded atomically in MySQL. Existing JSON counts are kept
+ * as a read-only baseline, so historical totals remain visible after rollout.
+ */
+require_once dirname(__DIR__) . '/includes/db.php';
+require_once dirname(__DIR__) . '/includes/catalog.php';
+
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store, no-cache, must-revalidate');
 
@@ -14,169 +23,109 @@ function game_click_json(bool $ok, array $extra = [], int $status = 200): never
     exit;
 }
 
-function game_click_file(): string
+/** Previously recorded totals: do not discard or overwrite this file. */
+function game_click_legacy_counts(): array
 {
-    return dirname(__DIR__) . '/data/game_clicks.json';
-}
+    $file = dirname(__DIR__) . '/data/game_clicks.json';
+    if (!is_file($file)) return [];
 
-function game_click_read_counts(): array
-{
-    $file = game_click_file();
-
-    if (!is_file($file)) {
-        return [];
-    }
-
-    $fp = @fopen($file, 'r');
-
-    if (!$fp) {
-        return [];
-    }
-
+    $fp = @fopen($file, 'rb');
+    if ($fp === false) return [];
     try {
-        if (!flock($fp, LOCK_SH)) {
-            return [];
-        }
-
+        if (!flock($fp, LOCK_SH)) return [];
         $raw = stream_get_contents($fp);
         flock($fp, LOCK_UN);
-
-        if (!is_string($raw) || trim($raw) === '') {
-            return [];
-        }
-
-        $decoded = json_decode($raw, true);
-
-        if (!is_array($decoded)) {
-            return [];
-        }
-
-        $counts = [];
-
-        foreach ($decoded as $slug => $count) {
-            if (
-                is_string($slug)
-                && preg_match('/^[a-z0-9_-]+$/', $slug)
-            ) {
-                $counts[$slug] = max(0, (int)$count);
-            }
-        }
-
-        return $counts;
-
     } finally {
         fclose($fp);
     }
+
+    $decoded = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($decoded)) return [];
+
+    $counts = [];
+    foreach ($decoded as $slug => $count) {
+        if (is_string($slug) && preg_match('/^[a-z0-9_-]{1,80}$/D', $slug)) {
+            $counts[$slug] = max(0, (int)$count);
+        }
+    }
+    return $counts;
 }
 
-function game_click_increment(string $slug): int
+/**
+ * Validate the requested game against the existing catalog, NOT an assumed
+ * lowercase disk path. A registered /games/Baduk/ directory is case-sensitive
+ * on Linux even though the counter key is normalized to "baduk".
+ */
+function game_click_registered(string $slug): bool
 {
-    $file = game_click_file();
-    $dir = dirname($file);
-
-    if (!is_dir($dir) && !mkdir($dir, 0770, true) && !is_dir($dir)) {
-        throw new RuntimeException('카운트 저장 폴더를 만들 수 없습니다.');
+    foreach (catalog_load('game') as $game) {
+        if (!is_array($game)) continue;
+        $url = trim((string)($game['url'] ?? ''));
+        if ($url === '') continue;
+        $parts = parse_url($url);
+        if (!is_array($parts)) continue;
+        $host = strtolower((string)($parts['host'] ?? ''));
+        if ($host !== '' && $host !== 'stimpack.pe.kr' && $host !== 'www.stimpack.pe.kr') {
+            continue;
+        }
+        $path = (string)($parts['path'] ?? '');
+        if (preg_match('~^/games/([a-zA-Z0-9_-]{1,80})(?:/|$)~', $path, $matches)
+            && strtolower($matches[1]) === $slug) {
+            return true;
+        }
     }
+    return false;
+}
 
-    $fp = @fopen($file, 'c+');
-
-    if (!$fp) {
-        throw new RuntimeException('카운트 파일을 열 수 없습니다.');
+function game_click_counts(PDO $db): array
+{
+    $counts = game_click_legacy_counts();
+    $stmt = $db->query('SELECT slug, play_count FROM gamelab_game_play_counts');
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $slug = (string)$row['slug'];
+        $counts[$slug] = (int)($counts[$slug] ?? 0) + (int)$row['play_count'];
     }
+    ksort($counts);
+    return $counts;
+}
 
-    try {
-        if (!flock($fp, LOCK_EX)) {
-            throw new RuntimeException('카운트 파일 잠금에 실패했습니다.');
-        }
-
-        rewind($fp);
-        $raw = stream_get_contents($fp);
-
-        $counts = [];
-
-        if (is_string($raw) && trim($raw) !== '') {
-            $decoded = json_decode($raw, true);
-
-            if (is_array($decoded)) {
-                $counts = $decoded;
-            }
-        }
-
-        $counts[$slug] = max(0, (int)($counts[$slug] ?? 0)) + 1;
-
-        ksort($counts);
-
-        $json = json_encode(
-            $counts,
-            JSON_PRETTY_PRINT |
-            JSON_UNESCAPED_UNICODE |
-            JSON_UNESCAPED_SLASHES
-        );
-
-        if ($json === false) {
-            throw new RuntimeException('카운트 JSON 생성에 실패했습니다.');
-        }
-
-        ftruncate($fp, 0);
-        rewind($fp);
-
-        if (fwrite($fp, $json) === false) {
-            throw new RuntimeException('카운트 저장에 실패했습니다.');
-        }
-
-        fflush($fp);
-        flock($fp, LOCK_UN);
-
-        return (int)$counts[$slug];
-
-    } finally {
-        fclose($fp);
-    }
+function game_click_increment(PDO $db, string $slug): int
+{
+    $stmt = $db->prepare(
+        'INSERT INTO gamelab_game_play_counts (slug, play_count) VALUES (?, 1)
+         ON DUPLICATE KEY UPDATE play_count = play_count + 1'
+    );
+    $stmt->execute([$slug]);
+    $stmt = $db->prepare('SELECT play_count FROM gamelab_game_play_counts WHERE slug = ?');
+    $stmt->execute([$slug]);
+    return (int)$stmt->fetchColumn() + (int)(game_click_legacy_counts()[$slug] ?? 0);
 }
 
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-
-if ($method === 'GET') {
-    game_click_json(true, [
-        'counts' => game_click_read_counts(),
-    ]);
-}
-
-if ($method !== 'POST') {
+if ($method !== 'GET' && $method !== 'POST') {
+    header('Allow: GET, POST', true);
     game_click_json(false, ['message' => 'Method Not Allowed'], 405);
 }
 
-$slug = strtolower(trim((string)($_POST['slug'] ?? '')));
-
-if (
-    $slug === ''
-    || !preg_match('/^[a-z0-9_-]{1,80}$/', $slug)
-) {
-    game_click_json(false, ['message' => '잘못된 게임 ID입니다.'], 400);
-}
-
-/*
- * 실제 서버에 존재하는 /games/폴더명만 카운트한다.
- * 임의의 키를 API에 넣어 카운트를 생성하지 못하게 한다.
- */
-$gameDir = dirname(__DIR__) . '/games/' . $slug;
-
-if (!is_dir($gameDir)) {
-    game_click_json(false, ['message' => '게임을 찾을 수 없습니다.'], 404);
-}
-
 try {
-    $count = game_click_increment($slug);
+    $db = gamelab_db();
 
-    game_click_json(true, [
-        'slug' => $slug,
-        'count' => $count,
-    ]);
+    if ($method === 'GET') {
+        game_click_json(true, ['counts' => game_click_counts($db)]);
+    }
 
-} catch (Throwable $e) {
-    error_log('GAME_CLICK: ' . $e->getMessage());
+    $slug = strtolower(trim((string)($_POST['slug'] ?? '')));
+    if (!preg_match('/^[a-z0-9_-]{1,80}$/D', $slug)) {
+        game_click_json(false, ['message' => '잘못된 게임 ID입니다.'], 400);
+    }
 
-    game_click_json(false, [
-        'message' => '카운트를 저장하지 못했습니다.',
-    ], 500);
+    if (!game_click_registered($slug)) {
+        game_click_json(false, ['message' => '등록되지 않은 게임입니다.'], 404);
+    }
+
+    $count = game_click_increment($db, $slug);
+    game_click_json(true, ['slug' => $slug, 'count' => $count]);
+} catch (Throwable $error) {
+    error_log('[GAME LAB GAME CLICK] ' . get_class($error) . ': ' . $error->getMessage());
+    game_click_json(false, ['message' => '게임 플레이 집계 DB를 확인해 주세요.'], 503);
 }
