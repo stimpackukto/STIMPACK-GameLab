@@ -1,0 +1,32 @@
+name: Game play counter syntax
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/game_click.php'
+      - 'assets/js/app.js'
+      - 'index.php'
+      - '.github/workflows/game-play-count-lint.yml'
+  pull_request:
+    paths:
+      - 'api/game_click.php'
+      - 'assets/js/app.js'
+      - 'index.php'
+      - '.github/workflows/game-play-count-lint.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: PHP syntax
+        run: |
+          php -l api/game_click.php
+          php -l index.php
+      - name: JavaScript syntax
+        run: node --check assets/js/app.js
