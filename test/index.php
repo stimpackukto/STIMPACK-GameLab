@@ -225,8 +225,8 @@ require dirname(__DIR__) . '/includes/header.php';
 .devtest-card-toolbar .devtest-button{white-space:nowrap}
 .devtest-card-toolbar form{display:inline-flex;margin:0}
 .devtest-card-toolbar a.devtest-button{color:#fff;text-decoration:none;overflow-wrap:normal}
-.devtest-card .devtest-play-qr{position:absolute;left:50%;top:14px;display:inline-flex;align-items:center;justify-content:center;width:90px;height:90px;padding:5px;box-sizing:border-box;background:#fff;border:1px solid #bdcbd6;border-radius:9px;text-decoration:none;z-index:1}
-.devtest-play-qr-code,.devtest-play-qr-code img,.devtest-play-qr-code canvas{display:block;width:80px;height:80px;min-width:80px;min-height:80px}
+.devtest-card .devtest-play-qr{position:absolute;left:50%;top:14px;display:inline-flex;align-items:center;justify-content:center;width:65px;height:65px;padding:5px;box-sizing:border-box;background:#fff;border:1px solid #bdcbd6;border-radius:2px;text-decoration:none;z-index:1}
+.devtest-play-qr-code,.devtest-play-qr-code img,.devtest-play-qr-code canvas{display:block;width:60px;height:60px;min-width:60px;min-height:60px}
 .devtest-card .devtest-play-qr:hover{border-color:#14b8ff;box-shadow:0 0 0 2px rgba(20,184,255,.22)}
 @media(max-width:950px){
   .devtest-card .devtest-play-qr{position:static;float:right;margin:0 12px 10px}
