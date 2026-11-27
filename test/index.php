@@ -7,6 +7,16 @@ require_once dirname(__DIR__) . '/includes/devtest.php';
 
 $pageTitle = '비공개 개발테스트';
 $viewer = gamelab_devtest_user();
+// Resume an emailed owner confirmation after the existing Google OAuth flow.
+// The actual action still needs an explicit owner-only POST on /test/confirm.php.
+if ($viewer !== null && isset($_SESSION['devtest_owner_confirm_pending'])) {
+    $pendingId = (int)$_SESSION['devtest_owner_confirm_pending'];
+    unset($_SESSION['devtest_owner_confirm_pending']);
+    if ($pendingId > 0) {
+        header('Location: /test/confirm.php?application_id=' . $pendingId, true, 303);
+        exit;
+    }
+}
 $validTabs = ['recruiting', 'testing', 'completed'];
 $tab = (string)($_GET['tab'] ?? 'recruiting');
 if (!in_array($tab, $validTabs, true)) {
@@ -38,7 +48,7 @@ if ($viewer !== null) {
         // The DB migration is performed on the server before this page is deployed.
         $db->query('SELECT id, contact_email, image_path, video_url, play_url FROM gamelab_devtest_projects LIMIT 0');
         $db->query('SELECT owner_google_sub FROM gamelab_devtest_active_owners LIMIT 0');
-        $db->query('SELECT id FROM gamelab_devtest_applications LIMIT 0');
+        $db->query('SELECT id, owner_confirmed_at FROM gamelab_devtest_applications LIMIT 0');
     } catch (Throwable $error) {
         $databaseReady = false;
         error_log('[GAME LAB DEVTEST] database initialization check failed: ' . $error->getMessage());
@@ -150,9 +160,14 @@ if ($viewer !== null && $databaseReady && $db instanceof PDO) {
         $counts = gamelab_devtest_counts($db);
         $active = gamelab_devtest_active($db, $viewer['sub']);
         $projects = gamelab_devtest_list($db, $tab);
-        $joinStmt = $db->prepare('SELECT project_id FROM gamelab_devtest_applications WHERE applicant_google_sub = ?');
+        $joinStmt = $db->prepare('SELECT project_id, owner_confirmed_at FROM gamelab_devtest_applications WHERE applicant_google_sub = ?');
         $joinStmt->execute([$viewer['sub']]);
-        $joinedProjectIds = array_fill_keys(array_map('intval', $joinStmt->fetchAll(PDO::FETCH_COLUMN)), true);
+        $joinedProjectIds = [];
+        foreach ($joinStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $joinedProjectIds[(int)$row['project_id']] = $row['owner_confirmed_at'] !== null
+                ? 'owner_confirmed'
+                : 'applied';
+        }
 
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             if (isset($_GET['new']) && $active === null) {
@@ -405,7 +420,11 @@ require dirname(__DIR__) . '/includes/header.php';
                     <?php if ($project['status'] === 'recruiting' && !hash_equals((string)$project['owner_google_sub'], $viewer['sub'])): ?>
                         <div class="devtest-card-actions">
                             <?php if (isset($joinedProjectIds[(int)$project['id']])): ?>
-                                <button class="devtest-button muted" type="button" disabled>신청 완료</button>
+                                <?php if ($joinedProjectIds[(int)$project['id']] === 'owner_confirmed'): ?>
+                                    <button class="devtest-button complete" type="button" disabled>오너 확인</button>
+                                <?php else: ?>
+                                    <button class="devtest-button muted" type="button" disabled>신청 완료</button>
+                                <?php endif; ?>
                             <?php elseif ((int)$project['recruited_count'] >= (int)$project['target_count']): ?>
                                 <button class="devtest-button muted" type="button" disabled>모집 마감</button>
                             <?php else: ?>
