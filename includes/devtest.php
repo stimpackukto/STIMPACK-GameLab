@@ -479,7 +479,7 @@ function gamelab_devtest_join(PDO $db, array $viewer, int $projectId, string $ap
  */
 function gamelab_devtest_confirm_token(PDO $db, int $applicationId, string $token): bool
 {
-    if ($applicationId < 1 || preg_match('/\\A[a-f0-9]{64}\\z/D', $token) !== 1) {
+    if ($applicationId < 1 || preg_match('/^[a-f0-9]{64}$/D', $token) !== 1) {
         throw new RuntimeException('확인 링크가 올바르지 않습니다.');
     }
 
