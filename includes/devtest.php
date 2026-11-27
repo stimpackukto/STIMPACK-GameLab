@@ -72,6 +72,27 @@ function gamelab_devtest_form_values(array $input): array
             throw new RuntimeException('영상 링크는 유튜브 또는 틱톡의 HTTPS 주소만 입력할 수 있습니다.');
         }
     }
+    $playUrl = trim((string)($input['play_url'] ?? ''));
+    if ($playUrl !== '') {
+        $parts = parse_url($playUrl);
+        $host = is_array($parts) ? strtolower((string)($parts['host'] ?? '')) : '';
+        $path = is_array($parts) ? (string)($parts['path'] ?? '') : '';
+        $isStorePage = $path === '/store/apps/details';
+        $isTesterOptIn = preg_match('~^/apps/testing/[a-zA-Z0-9._-]+/?$~D', $path) === 1;
+        if (strlen($playUrl) > 500 || !filter_var($playUrl, FILTER_VALIDATE_URL)
+            || !is_array($parts) || strtolower((string)($parts['scheme'] ?? '')) !== 'https'
+            || $host !== 'play.google.com' || isset($parts['user']) || isset($parts['pass'])
+            || (!$isStorePage && !$isTesterOptIn)) {
+            throw new RuntimeException('Google Play 앱 주소 또는 공식 테스터 참여 링크(HTTPS)만 입력해 주세요.');
+        }
+        if ($isStorePage) {
+            parse_str((string)($parts['query'] ?? ''), $params);
+            if (!isset($params['id']) || !is_string($params['id'])
+                || preg_match('/^[a-zA-Z0-9._-]+$/D', $params['id']) !== 1) {
+                throw new RuntimeException('Google Play 앱 주소에 올바른 앱 ID(id=...)가 있어야 합니다.');
+            }
+        }
+    }
     return [
         'title' => $title,
         'description' => $description,
@@ -79,6 +100,7 @@ function gamelab_devtest_form_values(array $input): array
         'target_count' => $target,
         'contact_email' => $contactEmail,
         'video_url' => $videoUrl !== '' ? $videoUrl : null,
+        'play_url' => $playUrl !== '' ? $playUrl : null,
     ];
 }
 
@@ -172,7 +194,7 @@ function gamelab_devtest_list(PDO $db, string $status): array
     }
     $stmt = $db->prepare('
         SELECT id, owner_google_sub, title, description, recruited_count, target_count,
-               contact_email, image_path, video_url, status, created_at, started_at, completed_at
+               contact_email, image_path, video_url, play_url, status, created_at, started_at, completed_at
         FROM gamelab_devtest_projects
         WHERE status = ?
         ORDER BY updated_at DESC, id DESC
@@ -186,7 +208,7 @@ function gamelab_devtest_owned_project(PDO $db, int $id, string $sub, bool $lock
 {
     $stmt = $db->prepare('
         SELECT id, owner_google_sub, owner_email, title, description, recruited_count, target_count,
-               contact_email, image_path, video_url, status
+               contact_email, image_path, video_url, play_url, status
         FROM gamelab_devtest_projects
         WHERE id = ? AND owner_google_sub = ?
         LIMIT 1' . ($lock ? ' FOR UPDATE' : '')
@@ -206,13 +228,13 @@ function gamelab_devtest_create(PDO $db, array $user, array $values): void
         $stmt = $db->prepare('
             INSERT INTO gamelab_devtest_projects
             (owner_google_sub, owner_email, title, description, recruited_count, target_count,
-             contact_email, image_path, video_url, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, \'recruiting\')
+             contact_email, image_path, video_url, play_url, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'recruiting\')
         ');
         $stmt->execute([
             $user['sub'], $user['email'], $values['title'], $values['description'],
             $values['recruited_count'], $values['target_count'],
-            $values['contact_email'], $values['image_path'] ?? null, $values['video_url'],
+            $values['contact_email'], $values['image_path'] ?? null, $values['video_url'], $values['play_url'],
         ]);
         $projectId = (int)$db->lastInsertId();
         // This unique lock is the authoritative one-active-app constraint.
@@ -249,13 +271,13 @@ function gamelab_devtest_edit(PDO $db, array $user, int $id, array $values): voi
         $stmt = $db->prepare('
             UPDATE gamelab_devtest_projects
             SET title = ?, description = ?, recruited_count = ?, target_count = ?,
-                contact_email = ?, image_path = ?, video_url = ?
+                contact_email = ?, image_path = ?, video_url = ?, play_url = ?
             WHERE id = ? AND owner_google_sub = ? AND status IN (\'recruiting\', \'testing\')
         ');
         $stmt->execute([
             $values['title'], $values['description'],
             $values['recruited_count'], $values['target_count'],
-            $values['contact_email'], $imagePath, $values['video_url'], $id, $user['sub'],
+            $values['contact_email'], $imagePath, $values['video_url'], $values['play_url'], $id, $user['sub'],
         ]);
         $db->commit();
         if ($previousImage !== null && $previousImage !== $imagePath) {
