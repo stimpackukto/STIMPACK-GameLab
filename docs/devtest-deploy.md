@@ -1,6 +1,30 @@
+## 이메일 '오너 확인' 간소화 (2026-11-27)
+
+- **메일 버튼 한 번으로 확인 완료**: 메일에서 `오너 확인` 클릭 → `/test/confirm.php`에서 JavaScript가 **백그라운드 POST** → `/api/devtest/confirm.php`에서 `owner_confirmed_at` 저장
+- **Google 재로그인과 2차 확인 버튼은 없음**. 메일 수신자는 본인 메일에 포함된 64자리 랜덤 토큰을 증명으로 사용한다.
+- 메일 URL의 `application_id`만으로는 처리되지 않는다. 서버에는 SHA-256 **토큰 해시만** 저장하고, 원본 토큰은 이메일 링크에만 포함한다.
+- `GET` 요청은 DB를 수정하지 않고, 실제 변경은 토큰을 포함한 API `POST`에서만 수행한다. 메일 링크 미리보기의 단순 GET은 확인 처리되지 않는다. 다만 JavaScript까지 실행하는 보안 스캐너는 자동 확인을 유발할 수 있으므로, 완전한 사람 클릭 검증이 필요하다면 별도 버튼 확인 방식이 필요하다.
+- 동일 링크를 다시 눌러도 이미 기록된 확인 시간은 바뀌지 않으며, 신청자의 `신청 완료`는 `오너 확인`으로 표시된다. 모집 인원은 변경되지 않는다.
+- **기존에 발송된 메일에는 토큰이 없다.** 따라서 과거의 `/test/confirm.php?application_id=4` 등의 링크로는 자동 확인할 수 없다. 신규 신청 메일부터 적용한다.
+- 서버의 공개 접근 주소는 `/test/confirm.php`, 실제 쓰기 API는 `/api/devtest/confirm.php`다. PHP-FPM 사용자는 기존 DB 접속 권한만 필요하다.
+
+### 운영 DB 마이그레이션 (한 번만)
+
+기존 `owner_confirmed_at` 컬럼이 있다는 전제하에 아래 파일만 실행한다:
+
+```bash
+cd /var/www/gamelab
+mysql gamelab < sql/20261127_devtest_owner_confirm_token.sql
+```
+
+이 파일은 기존 신청 기록을 유지하고 `owner_confirm_token_hash` 컬럼 하나만 추가한다. **SQL 실행 후 코드 배포**.
+변경 파일: `includes/devtest.php`, `test/index.php`, `test/confirm.php`, `api/devtest/confirm.php`.
+기존 WoW SMTP 설정, `includes/devtest_mail.php`, Google 인증/앱 소유권 검증 로직은 그대로 유지.
+테스트: 새 신청 메일의 버튼 클릭 → 화면의 확인 안내 → DB `owner_confirmed_at` 채워지는지 확인 → 신청자가 목록 새로고침 → `오너 확인` 표기. 반드시 재확인 날짜가 바뀌지 않는지 테스트.
+
 ## 이메일 오너 확인 기능 서버 적용 (2026-11-27)
 
-**먼저** 기존 `gamelab` DB에 새 컬럼만 추가한다. 기존 데이터는 보존되며 이전 요청은 `owner_confirmed_at=NULL`로 유지된다.
+**기존 단계**: `owner_confirmed_at` 컬럼이 없는 서버만 이전 SQL을 먼저 실행한다. 기존 데이터는 보존되며 이전 요청은 `owner_confirmed_at=NULL`로 유지된다.
 
 ```bash
 cd /var/www/gamelab
@@ -8,11 +32,11 @@ mysql gamelab < sql/20261127_devtest_owner_confirm.sql
 ```
 
 - 위 `ALTER TABLE`은 **한 번만** 실행. 두 번째 실행 시 중복 컬럼 오류 발생
-- 이후 `test/index.php`, `test/confirm.php`, `api/devtest/confirm.php`, `includes/devtest.php`, `includes/devtest_mail.php` 배포
-- 기존 Google OAuth 설정(허용된 `/test/` 반환 경로)은 수정할 필요 없음. 확인 페이지에서 로그인하면 기존 OAuth 흐름을 통해 확인 화면으로 복귀
-- 비로그인 상태의 이메일 버튼 클릭 → Google 로그인 → 확인 화면 → 최종 확인
-- 다른 Google 계정으로 로그인한 상태에서는 403 응답. 임의의 POST로 다른 소유자의 신청을 확인할 수 없음
-- 이메일 앱의 GET 미리보기/검색 엔진 요청만으로 상태가 변하면 안 됨
+- 이후 최신 `test/index.php`, `test/confirm.php`, `api/devtest/confirm.php`, `includes/devtest.php` 배포
+- 기존 Google OAuth 설정(허용된 `/test/` 반환 경로)은 수정할 필요 없음. 메일 확인에서는 OAuth를 호출하지 않는다
+- 비로그인 상태의 이메일 버튼 클릭 → 백그라운드 POST → 확인 날짜 저장
+- 다른 Google 계정으로 로그인되어 있어도 이메일 토큰이 유효하면 확인 가능. 토큰 없는 임의 POST는 거절
+- 이메일 앱의 단순 GET 미리보기는 상태를 바꾸지 않는다. JS까지 실행하는 스캐너는 예외일 수 있음
 - 신청자에서 페이지 새로고침 후 `오너 확인` 표시 확인. `recruited_count`는 변경되지 않아야 함
 - 메일 전송은 HTML 버튼과 텍스트 링크 대체 본문을 모두 제공; 기존 WoW Gmail SMTP 계정 그대로 사용
 
@@ -28,9 +52,9 @@ URL: /test/ (기존 헤더의 '개발테스트' 메뉴)
 - 카드에는 대표 이미지와 영상 링크, Google Play 링크가 등록된 경우 'Google Play' 버튼을 표시. 모집 중인 타인 앱에는 '테스트 참여' 버튼을 표시
 - '테스트 참여' 클릭 → 대화상자에서 참여할 이메일 입력 → 신청 기록 → **WoW와 동일한 PHPMailer + Gmail SMTP**로 등록 당시 소유자 구글 인증 이메일에 전송
 - 로그인한 Google sub마다 앱별 신청 1회(중복 불가). 앱 등록자는 자기 앱에 신청 불가
-- **이메일 하단에 '오너 확인' 버튼** 추가. `https://stimpack.pe.kr/test/confirm.php?application_id=N` 으로 이동
-- 메일 URL GET은 절대 DB를 변경하지 않음(메일 앱의 링크 미리보기·자동 스캔 대비). 본인 Google 로그인 후 확인 화면의 `오너 확인 완료` 버튼 POST → `/api/devtest/confirm.php`
-- API는 Google sub로 프로젝트 실제 소유자와 일치하는지 확인하고 CSRF 검사. 확인 시간 `owner_confirmed_at` 저장; 재확인은 멱등 처리
+- **이메일 하단에 '오너 확인' 버튼** 추가. `https://stimpack.pe.kr/test/confirm.php?application_id=N&token=비밀값` 으로 이동
+- 메일 URL GET은 DB를 변경하지 않고, 유효한 랜덤 토큰을 가진 확인 페이지에서 자동 POST를 수행한다. Google 로그인은 필요 없다.
+- API는 이메일로 발송한 토큰의 SHA-256 해시를 확인하고 `owner_confirmed_at`만 기록한다. 중복 확인은 멱등 처리
 - 테스터 본인에게는 `신청 완료` → `오너 확인` 버튼으로 표시 변경(새로고침 시 반영). 이는 신청서 수신 확인일 뿐 테스터 승인·설치 인증이 아님
 - 이미 발송된 기존 이메일에는 링크가 없으며, 과거 신청 기록은 그대로 유지됨. 자동 재발송은 하지 않음
 - 신청 이메일은 입력한 문자열을 앱 소유자에게 알려주며 별도 이메일 소유 확인은 하지 않음. 앱 설치·Play 테스트 등록이나 모집 완료 인원 자동 집계는 수행하지 않음
