@@ -303,7 +303,7 @@ $scriptVersion = (string)(@filemtime(dirname(__DIR__) . '/assets/js/app.js') ?: 
                 class="<?= is_active('/test') ? 'active' : '' ?>"
                 href="/test/"
             >
-                개발테스트
+                비공개테스트
             </a>
 
 

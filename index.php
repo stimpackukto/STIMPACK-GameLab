@@ -1499,7 +1499,7 @@ require __DIR__ . '/includes/header.php';
 
                 <h2>
 
-                    비공개 개발테스트
+                    구글플레이 비공개 테스트
 
                 </h2>
 
@@ -1517,7 +1517,7 @@ require __DIR__ . '/includes/header.php';
 
             <a href="/test/">
 
-                테스트 페이지 →
+                비공개 테스트 페이지 →
 
             </a>
 

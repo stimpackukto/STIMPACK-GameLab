@@ -283,7 +283,7 @@ require dirname(__DIR__) . '/includes/header.php';
 <section class="section">
 <div class="container">
     <div class="notice-box devtest-intro">
-        <b>STIMPACK GAME LAB 개발테스트 센터</b>
+        <b>STIMPACK GAME LAB 구글플레이 비공개 테스트 센터</b>
         <p>구글 로그인 사용자만 앱을 등록하고 관리할 수 있습니다. 모집 중인 앱은 소유자가 테스트 중으로 옮기고, 테스트를 마친 뒤 완료 처리할 수 있습니다.</p>
         <p class="devtest-note">Google Play의 테스트 참여·설치·평점·리뷰 및 보상과는 연동하지 않는 홈페이지 자체 관리 기능입니다.</p>
     </div>
