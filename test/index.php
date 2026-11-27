@@ -215,6 +215,14 @@ require dirname(__DIR__) . '/includes/header.php';
 .devtest-card{padding:24px;border:1px solid #234d6d;border-radius:13px;background:linear-gradient(140deg,#0e263c,#091c2f);margin-bottom:14px}
 .devtest-card h3{font-size:22px;margin:4px 0 10px}
 .devtest-card p{white-space:pre-line;color:#b1c8d9;margin:12px 0;overflow-wrap:anywhere}
+.devtest-card .devtest-description{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;margin:12px 0 0}
+.devtest-card .devtest-description.is-expanded{white-space:pre-line;overflow:visible;text-overflow:clip}
+.devtest-card-toolbar{display:flex;align-items:center;flex-wrap:nowrap;gap:9px;margin-top:16px;clear:both;overflow-x:auto;padding-bottom:5px}
+.devtest-card-toolbar>*{flex:0 0 auto}
+.devtest-card-toolbar .devtest-button{white-space:nowrap}
+.devtest-card-toolbar form{display:inline-flex;margin:0}
+.devtest-card-toolbar a.devtest-button{color:#fff;text-decoration:none;overflow-wrap:normal}
+
 .devtest-meta{display:flex;gap:9px 20px;flex-wrap:wrap;color:#86acc9;font-size:13px}
 .devtest-card-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}
 .devtest-note{font-size:13px;color:#98b9d1}
@@ -398,17 +406,21 @@ require dirname(__DIR__) . '/includes/header.php';
                             <span>완료일 <?= e(substr((string)$project['completed_at'], 0, 10)) ?></span>
                         <?php endif; ?>
                     </div>
-                    <p><?= e((string)$project['description']) ?></p>
-                    <div class="devtest-links">
+                    <p class="devtest-description" id="devtest-description-<?= (int)$project['id'] ?>"><?= e((string)$project['description']) ?></p>
+                    <div class="devtest-card-toolbar" role="group" aria-label="<?= e((string)$project['title']) ?> 메뉴">
+                        <button class="devtest-button muted" type="button"
+                                data-toggle-description="devtest-description-<?= (int)$project['id'] ?>"
+                                aria-expanded="false"
+                                aria-controls="devtest-description-<?= (int)$project['id'] ?>">자세히 보기</button>
                         <?php if (!empty($project['play_url'])): ?>
-                            <a class="devtest-button muted" href="<?= e((string)$project['play_url']) ?>" target="_blank" rel="noopener noreferrer">Google Play</a>
+                            <a class="devtest-button muted" href="<?= e((string)$project['play_url']) ?>"
+                               target="_blank" rel="noopener noreferrer">Google Play</a>
                         <?php endif; ?>
                         <?php if (!empty($project['video_url'])): ?>
-                            <a href="<?= e((string)$project['video_url']) ?>" target="_blank" rel="noopener noreferrer">▶ 소개 영상 보기 (유튜브·틱톡)</a>
+                            <a class="devtest-button muted" href="<?= e((string)$project['video_url']) ?>"
+                               target="_blank" rel="noopener noreferrer">소개 영상</a>
                         <?php endif; ?>
-                    </div>
-                    <?php if ($project['status'] === 'recruiting' && !hash_equals((string)$project['owner_google_sub'], $viewer['sub'])): ?>
-                        <div class="devtest-card-actions">
+                        <?php if ($project['status'] === 'recruiting' && !hash_equals((string)$project['owner_google_sub'], $viewer['sub'])): ?>
                             <?php if (isset($joinedProjectIds[(int)$project['id']])): ?>
                                 <?php if ($joinedProjectIds[(int)$project['id']] === 'owner_confirmed'): ?>
                                     <button class="devtest-button complete" type="button" disabled>오너 확인</button>
@@ -419,32 +431,11 @@ require dirname(__DIR__) . '/includes/header.php';
                                 <button class="devtest-button muted" type="button" disabled>모집 마감</button>
                             <?php else: ?>
                                 <button class="devtest-button primary" type="button" data-join-dialog="devtest-join-<?= (int)$project['id'] ?>">테스트 참여</button>
-                                <dialog class="devtest-join-dialog" id="devtest-join-<?= (int)$project['id'] ?>">
-                                    <h3>테스트 참여 신청</h3>
-                                    <p><strong><?= e((string)$project['title']) ?></strong>에 테스트 참여 의사를 전달합니다.</p>
-                                    <form method="post" action="/test/">
-                                        <input type="hidden" name="csrf" value="<?= e(gamelab_csrf_token()) ?>">
-                                        <input type="hidden" name="action" value="join">
-                                        <input type="hidden" name="project_id" value="<?= (int)$project['id'] ?>">
-                                        <div class="devtest-field">
-                                            <label for="applicant-email-<?= (int)$project['id'] ?>">테스트에 참여할 이메일</label>
-                                            <input id="applicant-email-<?= (int)$project['id'] ?>" name="applicant_email" type="email" required maxlength="254" autocomplete="email" value="<?= e($viewer['email']) ?>" placeholder="you@example.com">
-                                            <small>이메일은 앱 등록자에게 전달됩니다. 입력한 이메일은 별도로 인증하지 않습니다.</small>
-                                        </div>
-                                        <p class="devtest-note">이 신청은 홈페이지 내 참여 의사 전달이며 Google Play 테스트 등록은 별도로 진행됩니다.</p>
-                                        <div class="devtest-card-actions">
-                                            <button class="devtest-button muted" type="button" data-close-dialog>취소</button>
-                                            <button class="devtest-button primary" type="submit">참여 신청 전송</button>
-                                        </div>
-                                    </form>
-                                </dialog>
                             <?php endif; ?>
-                        </div>
-                    <?php endif; ?>
-                    <?php if (hash_equals((string)$project['owner_google_sub'], $viewer['sub']) && $project['status'] !== 'completed'): ?>
-                        <div class="devtest-card-actions">
+                        <?php endif; ?>
+                        <?php if (hash_equals((string)$project['owner_google_sub'], $viewer['sub']) && $project['status'] !== 'completed'): ?>
                             <a class="devtest-button muted"
-                                href="/test/?tab=<?= e($tab) ?>&edit=<?= (int)$project['id'] ?>#project-form">정보·모집 인원 수정</a>
+                               href="/test/?tab=<?= e($tab) ?>&edit=<?= (int)$project['id'] ?>#project-form">정보·모집 인원 수정</a>
                             <?php if ($project['status'] === 'recruiting'): ?>
                                 <form method="post" action="/test/">
                                     <input type="hidden" name="csrf" value="<?= e(gamelab_csrf_token()) ?>">
@@ -460,7 +451,31 @@ require dirname(__DIR__) . '/includes/header.php';
                                     <button class="devtest-button complete" type="submit">완료</button>
                                 </form>
                             <?php endif; ?>
-                        </div>
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($project['status'] === 'recruiting'
+                        && !hash_equals((string)$project['owner_google_sub'], $viewer['sub'])
+                        && !isset($joinedProjectIds[(int)$project['id']])
+                        && (int)$project['recruited_count'] < (int)$project['target_count']): ?>
+                        <dialog class="devtest-join-dialog" id="devtest-join-<?= (int)$project['id'] ?>">
+                            <h3>테스트 참여 신청</h3>
+                            <p><strong><?= e((string)$project['title']) ?></strong>에 테스트 참여 의사를 전달합니다.</p>
+                            <form method="post" action="/test/">
+                                <input type="hidden" name="csrf" value="<?= e(gamelab_csrf_token()) ?>">
+                                <input type="hidden" name="action" value="join">
+                                <input type="hidden" name="project_id" value="<?= (int)$project['id'] ?>">
+                                <div class="devtest-field">
+                                    <label for="applicant-email-<?= (int)$project['id'] ?>">테스트에 참여할 이메일</label>
+                                    <input id="applicant-email-<?= (int)$project['id'] ?>" name="applicant_email" type="email" required maxlength="254" autocomplete="email" value="<?= e($viewer['email']) ?>" placeholder="you@example.com">
+                                    <small>이메일은 앱 등록자에게 전달됩니다. 입력한 이메일은 별도로 인증하지 않습니다.</small>
+                                </div>
+                                <p class="devtest-note">이 신청은 홈페이지 내 참여 의사 전달이며 Google Play 테스트 등록은 별도로 진행됩니다.</p>
+                                <div class="devtest-card-actions">
+                                    <button class="devtest-button muted" type="button" data-close-dialog>취소</button>
+                                    <button class="devtest-button primary" type="submit">참여 신청 전송</button>
+                                </div>
+                            </form>
+                        </dialog>
                     <?php endif; ?>
                 </article>
             <?php endforeach; ?>
@@ -470,6 +485,17 @@ require dirname(__DIR__) . '/includes/header.php';
 </section>
 <script>
 document.addEventListener('click', function (event) {
+    const detailButton = event.target.closest('[data-toggle-description]');
+    if (detailButton) {
+        const description = document.getElementById(detailButton.getAttribute('data-toggle-description'));
+        if (description) {
+            const expanded = detailButton.getAttribute('aria-expanded') === 'true';
+            description.classList.toggle('is-expanded', !expanded);
+            detailButton.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            detailButton.textContent = expanded ? '자세히 보기' : '접기';
+        }
+        return;
+    }
     const open = event.target.closest('[data-join-dialog]');
     if (open) {
         const dialog = document.getElementById(open.getAttribute('data-join-dialog'));
