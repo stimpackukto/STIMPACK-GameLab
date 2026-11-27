@@ -377,13 +377,15 @@ function gamelab_devtest_join(PDO $db, array $viewer, int $projectId, string $ap
             throw new RuntimeException('앱 등록자의 인증 이메일을 확인할 수 없습니다.');
         }
 
+        $ownerConfirmToken = bin2hex(random_bytes(32));
+        $ownerConfirmHash = hash('sha256', $ownerConfirmToken);
         $insert = $db->prepare('
             INSERT INTO gamelab_devtest_applications
-                (project_id, applicant_google_sub, applicant_email)
-            VALUES (?, ?, ?)
+                (project_id, applicant_google_sub, applicant_email, owner_confirm_token_hash)
+            VALUES (?, ?, ?, ?)
         ');
         try {
-            $insert->execute([$projectId, $viewer['sub'], $applicantEmail]);
+            $insert->execute([$projectId, $viewer['sub'], $applicantEmail, $ownerConfirmHash]);
         } catch (PDOException $error) {
             if ((string)$error->getCode() === '23000') {
                 throw new RuntimeException('이 앱에는 이미 참여 신청한 기록이 있습니다.');
@@ -400,16 +402,18 @@ function gamelab_devtest_join(PDO $db, array $viewer, int $projectId, string $ap
         throw $error;
     }
 
-    // Authenticated WoW SMTP sender. A link in the mail opens a confirmation
-    // page; the GET link itself never changes the database.
+    // The emailed secret is the confirmation credential. No Google account
+    // session is required. GET only renders a page; a background POST applies
+    // the acknowledgement so ordinary mail link previews cannot confirm.
     $safeTitle = str_replace(["\r", "\n"], ' ', $projectTitle);
-    $confirmUrl = 'https://stimpack.pe.kr/test/confirm.php?application_id=' . $applicationId;
+    $confirmUrl = 'https://stimpack.pe.kr/test/confirm.php?application_id='
+        . $applicationId . '&token=' . $ownerConfirmToken;
     $subjectText = '[STIMPACK GAME LAB] 개발테스트 참여 신청: ' . $safeTitle;
     $body = "STIMPACK GAME LAB 개발테스트 참여 신청\n\n"
         . "앱: " . $safeTitle . "\n"
         . "테스트 참여 희망 이메일: " . $applicantEmail . "\n"
         . "신청일시: " . date('Y-m-d H:i:s') . "\n\n"
-        . "신청 내용을 확인하려면 다음 주소에 접속하여 구글 인증 계정으로 확인해 주세요.\n"
+        . "이메일 하단의 오너 확인 링크를 열면 로그인 없이 신청 확인이 기록됩니다.\n"
         . $confirmUrl . "\n\n"
         . "이 메일은 STIMPACK 인증 SMTP 계정에서 발송되었습니다.\n"
         . "오너 확인은 신청서 확인만 뜻하며 Google Play 테스터 등록/설치를 자동 처리하지 않습니다.\n"
@@ -427,8 +431,8 @@ function gamelab_devtest_join(PDO $db, array $viewer, int $projectId, string $ap
         . '<p>신청 이메일을 확인한 뒤 아래 버튼을 눌러 주세요.</p>'
         . '<p style="margin:24px 0"><a href="' . $escConfirmUrl
         . '" style="display:inline-block;background:#028be3;color:#fff;padding:12px 24px;border-radius:9px;text-decoration:none;font-weight:bold">오너 확인</a></p>'
-        . '<p style="color:#526a7a;font-size:13px">앱 소유자의 Google 인증 계정으로 로그인한 후 최종 확인해야 합니다. '
-        . '이 확인은 Google Play 테스터 등록이나 앱 설치를 의미하지 않습니다.</p>'
+        . '<p style="color:#526a7a;font-size:13px">이메일 링크로 신청 확인 시간만 기록됩니다. '
+        . 'Google Play 테스터 등록이나 앱 설치는 자동으로 처리되지 않습니다.</p>'
         . '<p style="color:#526a7a;font-size:12px;overflow-wrap:anywhere">버튼이 열리지 않으면 주소를 복사하세요: '
         . '<a href="' . $escConfirmUrl . '">' . $escConfirmUrl . '</a></p>'
         . '</div></body></html>';
@@ -468,39 +472,47 @@ function gamelab_devtest_join(PDO $db, array $viewer, int $projectId, string $ap
 }
 
 /**
- * Read one application and its project without granting any access.
- * The caller MUST compare the current authenticated Google sub to owner_google_sub.
+ * Confirm one request by possession of the secret sent to the original owner
+ * email. The SHA-256 digest is the only part persisted in the database.
+ * Replaying a valid confirmation is harmless and does not rewrite the date.
+ * @return bool true when newly confirmed, false when already confirmed
  */
-function gamelab_devtest_application(PDO $db, int $applicationId): ?array
+function gamelab_devtest_confirm_token(PDO $db, int $applicationId, string $token): bool
 {
-    $stmt = $db->prepare('
-        SELECT a.id, a.applicant_email, a.owner_confirmed_at,
-               p.id AS project_id, p.title, p.owner_google_sub
-        FROM gamelab_devtest_applications a
-        INNER JOIN gamelab_devtest_projects p ON p.id = a.project_id
-        WHERE a.id = ? LIMIT 1
-    ');
-    $stmt->execute([$applicationId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    return $row === false ? null : $row;
-}
+    if ($applicationId < 1 || preg_match('/\\A[a-f0-9]{64}\\z/D', $token) !== 1) {
+        throw new RuntimeException('확인 링크가 올바르지 않습니다.');
+    }
 
-/**
- * Explicit POST only: verified project owner may acknowledge an application.
- * Idempotent; repeat confirmation does not modify the timestamp.
- */
-function gamelab_devtest_confirm_application(PDO $db, array $viewer, int $applicationId): void
-{
-    $stmt = $db->prepare('
-        UPDATE gamelab_devtest_applications a
-        INNER JOIN gamelab_devtest_projects p ON p.id = a.project_id
-        SET a.owner_confirmed_at = COALESCE(a.owner_confirmed_at, NOW())
-        WHERE a.id = ? AND p.owner_google_sub = ?
-    ');
-    $stmt->execute([$applicationId, $viewer['sub']]);
-    // No rowCount() check: matching, already-confirmed rows are idempotent.
-    $project = gamelab_devtest_application($db, $applicationId);
-    if ($project === null || !hash_equals((string)$project['owner_google_sub'], $viewer['sub'])) {
-        throw new RuntimeException('앱을 등록한 Google 계정만 신청을 확인할 수 있습니다.');
+    $db->beginTransaction();
+    try {
+        $stmt = $db->prepare('
+            SELECT owner_confirm_token_hash, owner_confirmed_at
+            FROM gamelab_devtest_applications
+            WHERE id = ? LIMIT 1 FOR UPDATE
+        ');
+        $stmt->execute([$applicationId]);
+        $application = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $savedHash = is_array($application) ? (string)($application['owner_confirm_token_hash'] ?? '') : '';
+        if ($savedHash === '' || !hash_equals($savedHash, hash('sha256', $token))) {
+            throw new RuntimeException('유효하지 않은 확인 링크입니다.');
+        }
+
+        $isNew = $application['owner_confirmed_at'] === null;
+        if ($isNew) {
+            $update = $db->prepare('
+                UPDATE gamelab_devtest_applications
+                SET owner_confirmed_at = NOW()
+                WHERE id = ? AND owner_confirmed_at IS NULL
+            ');
+            $update->execute([$applicationId]);
+        }
+        $db->commit();
+        return $isNew;
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $error;
     }
 }
