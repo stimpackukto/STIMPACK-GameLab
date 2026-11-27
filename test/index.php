@@ -30,13 +30,13 @@ $noticeText = [
 
 $formMode = '';
 $formProjectId = 0;
-$formValues = ['title' => '', 'description' => '', 'recruited_count' => '0', 'target_count' => '12', 'contact_email' => $viewer['email'] ?? '', 'video_url' => '', 'image_path' => ''];
+$formValues = ['title' => '', 'description' => '', 'recruited_count' => '0', 'target_count' => '12', 'contact_email' => $viewer['email'] ?? '', 'video_url' => '', 'play_url' => '', 'image_path' => ''];
 
 if ($viewer !== null) {
     try {
         $db = gamelab_db();
         // The DB migration is performed on the server before this page is deployed.
-        $db->query('SELECT id, contact_email, image_path, video_url FROM gamelab_devtest_projects LIMIT 0');
+        $db->query('SELECT id, contact_email, image_path, video_url, play_url FROM gamelab_devtest_projects LIMIT 0');
         $db->query('SELECT owner_google_sub FROM gamelab_devtest_active_owners LIMIT 0');
         $db->query('SELECT id FROM gamelab_devtest_applications LIMIT 0');
     } catch (Throwable $error) {
@@ -78,6 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'target_count' => (string)($_POST['target_count'] ?? ''),
                 'contact_email' => (string)($_POST['contact_email'] ?? ''),
                 'video_url' => (string)($_POST['video_url'] ?? ''),
+                'play_url' => (string)($_POST['play_url'] ?? ''),
                 'image_path' => '',
             ];
             $values = gamelab_devtest_form_values($_POST);
@@ -106,6 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'target_count' => (string)($_POST['target_count'] ?? ''),
                 'contact_email' => (string)($_POST['contact_email'] ?? ''),
                 'video_url' => (string)($_POST['video_url'] ?? ''),
+                'play_url' => (string)($_POST['play_url'] ?? ''),
                 'image_path' => '',
             ];
             $values = gamelab_devtest_form_values($_POST);
@@ -173,6 +175,7 @@ if ($viewer !== null && $databaseReady && $db instanceof PDO) {
                     'target_count' => (string)$project['target_count'],
                     'contact_email' => (string)$project['owner_email'],
                     'video_url' => (string)($project['video_url'] ?? ''),
+                    'play_url' => (string)($project['play_url'] ?? ''),
                     'image_path' => (string)($project['image_path'] ?? ''),
                 ];
             }
@@ -285,7 +288,7 @@ require dirname(__DIR__) . '/includes/header.php';
         </div>
     <?php elseif (!$databaseReady): ?>
         <div class="devtest-alert" role="alert">
-            개발테스트 DB가 준비되지 않았습니다. 관리자는 sql/20261127_devtest_projects.sql, sql/20261127_devtest_media.sql, sql/20261127_devtest_applications.sql 적용 여부를 확인해 주세요.
+            개발테스트 DB가 준비되지 않았습니다. 관리자는 sql/20261127_devtest_projects.sql, sql/20261127_devtest_media.sql, sql/20261127_devtest_applications.sql, sql/20261127_devtest_google_play.sql 적용 여부를 확인해 주세요.
         </div>
     <?php else: ?>
         <div id="devtest-projects"></div>
@@ -358,6 +361,11 @@ require dirname(__DIR__) . '/includes/header.php';
                             <small>유튜브 · 쇼츠 · 틱톡 영상의 공유 링크를 입력해 주세요.</small>
                         </div>
                     </div>
+                    <div class="devtest-field">
+                        <label for="devtest-play">Google Play 링크 (선택)</label>
+                        <input id="devtest-play" name="play_url" type="url" maxlength="500" value="<?= e((string)$formValues['play_url']) ?>" placeholder="https://play.google.com/store/apps/details?id=...">
+                        <small>앱의 Google Play 주소나 공식 테스터 참여 링크를 등록하세요. 테스터 등록·승인은 앱 소유자가 직접 처리합니다.</small>
+                    </div>
                     <div class="devtest-card-actions">
                         <button class="devtest-button primary" type="submit"><?= $formMode === 'edit' ? '수정 저장' : '모집 중에 등록' ?></button>
                         <a class="devtest-button muted" href="/test/?tab=<?= e($tab) ?>#devtest-projects">취소</a>
@@ -387,6 +395,9 @@ require dirname(__DIR__) . '/includes/header.php';
                     </div>
                     <p><?= e((string)$project['description']) ?></p>
                     <div class="devtest-links">
+                        <?php if (!empty($project['play_url'])): ?>
+                            <a class="devtest-button muted" href="<?= e((string)$project['play_url']) ?>" target="_blank" rel="noopener noreferrer">Google Play</a>
+                        <?php endif; ?>
                         <?php if (!empty($project['video_url'])): ?>
                             <a href="<?= e((string)$project['video_url']) ?>" target="_blank" rel="noopener noreferrer">▶ 소개 영상 보기 (유튜브·틱톡)</a>
                         <?php endif; ?>
