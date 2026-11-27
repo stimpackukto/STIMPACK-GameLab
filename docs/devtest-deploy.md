@@ -73,3 +73,36 @@ URL: /test/ (기존 헤더의 '개발테스트' 메뉴)
 - GitHub 반영만으로는 운영 DB가 변경되지 않는다. **PHP 코드를 배포하기 전에 media 및 applications SQL을 먼저 적용**한다. 컬럼 또는 테이블이 없으면 페이지에 준비 중 안내가 표시된다.
 - 사용자의 실제 앱 설치, 기기 사용 여부, 테스터 인증/피드백 검증 기능은 이번 단계에 구현하지 않았다.
 - 서버에 미추적 test/index.php가 존재하면 Git pull 과정에서 untracked file 충돌이 발생할 수 있다. 백업 후 충돌 파일을 옮기고 Pull 한다.
+
+
+## 이메일 발송이 안 될 때 (운영 서버에서 확인)
+
+`includes/devtest.php`는 PHP `mail()` 함수를 사용한다. SMTP 계정/전송 서비스가 자동 구성되는 것은 아니다.
+`mail()`이 true여도 로컬 전송 프로그램이 받았다는 뜻이며 실제 수신자 도착을 보장하지 않는다.
+
+### 1. 메일 전송 프로그램/서비스
+```bash
+php -i | grep -i sendmail_path
+command -v sendmail || true
+systemctl is-active postfix || true
+sudo postqueue -p 2>/dev/null || true
+```
+PHP-FPM은 CLI와 ini가 다를 수 있으므로, CLI 결과가 정상이어도 PHP-FPM 설정을 확인한다.
+
+### 2. 요청 후 로그 확인
+```bash
+sudo journalctl -u php8.1-fpm --since '15 minutes ago' --no-pager | grep 'GAME LAB DEVTEST'
+sudo tail -n 100 /var/log/mail.log
+sudo journalctl -u postfix --since '15 minutes ago' --no-pager
+```
+Ubuntu PHP-FPM 로그 위치나 Postfix 로그는 서버 설정에 따라 다를 수 있다.
+`PHP mail() rejected`: PHP/로컬 MTA 수준의 즉각적인 발송 실패.
+`PHP mail() accepted ... delivery unconfirmed`: 로컬 시스템이 요청만 접수함. 실제 전송 결과는 Postfix 큐/메일 로그에서 확인.
+`status=deferred`: 배송 지연/실패 재시도 중.
+`status=bounced`: 배송 거부/반송.
+
+### 3. 메일 경로 설정
+- 웹앱에 SMTP 비밀번호를 하드코딩하거나 Git 저장소에 올리지 않는다.
+- 운영 서버에서 발송 계정 인증이 가능한 메일 릴레이 또는 Postfix SMTP 설정을 사용한다.
+- `noreply@stimpack.pe.kr` 주소의 실제 발신 권한/SPF/DKIM/DMARC를 점검한다.
+- 참여 신청 DB의 `mail_sent_at` 값은 PHP 전송 프로그램이 수락한 시간이며 수신 완료 증거가 아니다.
