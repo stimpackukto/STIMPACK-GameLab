@@ -8,10 +8,10 @@ URL: /test/ (기존 헤더의 '개발테스트' 메뉴)
 - 참여 신청 알림 수신 이메일은 **앱 등록 당시 구글 인증 이메일(owner_email)** 로 고정. 등록 또는 수정 POST에서 다른 수신 이메일을 지정해도 무시됨
 - 대표 이미지 1장(JPG/PNG/WEBP, 최대 5MB), 소개 영상 링크(유튜브·쇼츠·틱톡, 선택)
 - 카드에는 대표 이미지와 영상 링크, 모집 중인 타인 앱에는 '테스트 참여' 버튼을 표시
-- '테스트 참여' 클릭 → 대화상자에서 참여할 이메일 입력 → 서버에 신청 기록 → 등록 당시 소유자 구글 인증 이메일로 PHP mail() 알림
+- '테스트 참여' 클릭 → 대화상자에서 참여할 이메일 입력 → 신청 기록 → **WoW와 동일한 PHPMailer + Gmail SMTP**로 등록 당시 소유자 구글 인증 이메일에 전송
 - 로그인한 Google sub마다 앱별 신청 1회(중복 불가). 앱 등록자는 자기 앱에 신청 불가
 - 신청 이메일은 입력한 문자열을 앱 소유자에게 알려주며 별도 이메일 소유 확인은 하지 않음. 앱 설치·Play 테스트 등록이나 모집 완료 인원 자동 집계는 수행하지 않음
-- PHP mail() 발송 요청 성공은 실제 메일함 수신 보장이 아니므로 서버 메일 시스템 구성·검증 필요
+- SMTP 발송 성공은 SMTP 서버에 제출 성공을 의미하며 실제 수신함 도착까지 보장하지 않음
 - 이미지 교체·삭제 가능. 수정 시 새 이미지를 올리지 않으면 기존 이미지 유지
 - 소유자는 모집·테스트 중 프로젝트 정보를 수정할 수 있음
 - 소유자만 '테스트 진행': 모집 중 → 테스트 중
@@ -44,10 +44,13 @@ URL: /test/ (기존 헤더의 '개발테스트' 메뉴)
    PHP의 `upload_max_filesize`는 최소 5M, `post_max_size`는 최소 6M 권장.
    `/uploads/`는 .gitignore 대상이므로 새로 배포해도 이미지 파일은 유지되어야 함.
    서버는 업로드 경로의 PHP/스크립트 실행을 차단하고, 이미지는 정적 파일로만 제공해야 함.
-5. 새 test/index.php, includes/devtest.php, 변경된 auth/google_login.php,
+5. 새 test/index.php, includes/devtest.php, **includes/devtest_mail.php**, 변경된 auth/google_login.php,
    auth/google_callback.php 등을 기존 PHP 배포 방식대로 배포.
    /etc/stimpack/google_oauth.php, includes/config.php 및 기존 PHP-FPM 설정은 변경 금지.
-6. 서버의 PHP `mail()` 함수가 실제 발송을 접수할 수 있도록 메일 전송 설정(MTA/SMTP relay, SPF·DKIM 등)을 점검. 기존 `tester/join.php`도 동일한 `noreply@stimpack.pe.kr` From 헤더를 사용함. 메일 서버 로그와 실제 수신 메일함 양쪽 확인 필요.
+6. WoW 메일 발송과 같은 `/etc/trinity-web.env` 설정(`GMAIL_SMTP_HOST`, `GMAIL_SMTP_USER`, `GMAIL_SMTP_PASS`, `GMAIL_SMTP_FROM`, `GMAIL_SMTP_FROM_NAME`, `GMAIL_SMTP_PORT`, `GMAIL_SMTP_SECURE`)을 재사용. **비밀번호는 GitHub에 올리지 말 것.**
+   현재 PHPMailer 설치를 자동 탐색하는 경로: `/var/www/gamelab/includes/PHPMailer/src`, `/var/www/gamelab/wow/includes/PHPMailer/src`, `/var/www/stimpack/includes/PHPMailer/src`.
+   WoW의 설치 위치가 다르면 `/etc/trinity-web.env`에 선택 항목 `GAMELAB_PHPMAILER_SRC=/절대경로/PHPMailer/src`를 추가할 수 있음.
+   PHP-FPM 실행 계정이 설정 파일을 읽을 권한이 있어야 함(기존 WoW 메일이 성공한다면 설정을 그대로 재사용).
 7. 브라우저에서 /test/ 방문 후 구글 로그인(로그인 후 /test/ 복귀),
    구글 인증 수신 이메일 자동 지정/대표 이미지 1장 첨부/유튜브·틱톡 링크 등록,
    카드 이미지·영상 링크 확인/테스트 참여 대화상자/신청 이메일 발송 및 기록/이미지 교체·삭제/모집 인원 수정/상태 이동/재등록을 테스트.
@@ -77,32 +80,30 @@ URL: /test/ (기존 헤더의 '개발테스트' 메뉴)
 
 ## 이메일 발송이 안 될 때 (운영 서버에서 확인)
 
-`includes/devtest.php`는 PHP `mail()` 함수를 사용한다. SMTP 계정/전송 서비스가 자동 구성되는 것은 아니다.
-`mail()`이 true여도 로컬 전송 프로그램이 받았다는 뜻이며 실제 수신자 도착을 보장하지 않는다.
+개발테스트는 PHP `mail()`을 사용하지 않고, `includes/devtest_mail.php`에서 WoW와 동일한 PHPMailer + Gmail SMTP 설정을 사용한다.
+전송에 성공하면 SMTP 서버가 메시지를 접수했다는 뜻이며 실제 수신함에 도착했는지는 별도 확인이 필요하다.
 
-### 1. 메일 전송 프로그램/서비스
+### 1. WoW 메일 설정·PHPMailer 설치 확인
 ```bash
-php -i | grep -i sendmail_path
-command -v sendmail || true
-systemctl is-active postfix || true
-sudo postqueue -p 2>/dev/null || true
+# 비밀번호가 포함되므로 설정 파일 내용은 출력하거나 공유하지 말 것
+sudo test -r /etc/trinity-web.env && echo '환경 설정 파일 존재'
+sudo find /var/www/gamelab /var/www/stimpack -path '*/PHPMailer/src/PHPMailer.php' -print 2>/dev/null
 ```
-PHP-FPM은 CLI와 ini가 다를 수 있으므로, CLI 결과가 정상이어도 PHP-FPM 설정을 확인한다.
+환경 파일은 PHP-FPM 실행 계정에서 읽을 수 있어야 한다. 비밀번호를 로그/채팅에 출력하지 않는다.
 
 ### 2. 요청 후 로그 확인
 ```bash
-sudo journalctl -u php8.1-fpm --since '15 minutes ago' --no-pager | grep 'GAME LAB DEVTEST'
-sudo tail -n 100 /var/log/mail.log
-sudo journalctl -u postfix --since '15 minutes ago' --no-pager
+sudo journalctl -u php8.1-fpm --since '15 minutes ago' --no-pager | grep -E 'GAME LAB DEVTEST|DEVTEST SMTP'
 ```
-Ubuntu PHP-FPM 로그 위치나 Postfix 로그는 서버 설정에 따라 다를 수 있다.
-`PHP mail() rejected`: PHP/로컬 MTA 수준의 즉각적인 발송 실패.
-`PHP mail() accepted ... delivery unconfirmed`: 로컬 시스템이 요청만 접수함. 실제 전송 결과는 Postfix 큐/메일 로그에서 확인.
-`status=deferred`: 배송 지연/실패 재시도 중.
-`status=bounced`: 배송 거부/반송.
+로그 위치는 PHP-FPM 설정에 따라 다를 수 있다.
+`config_unreadable`: PHP-FPM 계정이 `/etc/trinity-web.env`를 읽을 수 없음.
+`config_invalid`: SMTP 설정 값 누락 또는 형식 오류.
+`phpmailer_not_found`: 기존 WoW PHPMailer 라이브러리 경로가 다름.
+`send_failed`: SMTP 로그인/접속/발송 중 오류.
+`SMTP accepted ... delivery unconfirmed`: SMTP 서버에 발송 요청은 접수됨.
 
 ### 3. 메일 경로 설정
 - 웹앱에 SMTP 비밀번호를 하드코딩하거나 Git 저장소에 올리지 않는다.
-- 운영 서버에서 발송 계정 인증이 가능한 메일 릴레이 또는 Postfix SMTP 설정을 사용한다.
-- `noreply@stimpack.pe.kr` 주소의 실제 발신 권한/SPF/DKIM/DMARC를 점검한다.
-- 참여 신청 DB의 `mail_sent_at` 값은 PHP 전송 프로그램이 수락한 시간이며 수신 완료 증거가 아니다.
+- 운영 서버의 WoW에서 이미 사용하는 Gmail SMTP 계정 정보를 재사용한다. 별도의 Postfix 설치는 필요 없다.
+- `GMAIL_SMTP_FROM`에 지정된 발신 주소의 실제 발신 권한/SPF/DKIM/DMARC를 점검한다.
+- 참여 신청 DB의 `mail_sent_at` 값은 SMTP 발송 요청 성공 시각이며 수신 완료 증거가 아니다.
