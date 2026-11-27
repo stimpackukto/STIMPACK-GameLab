@@ -43,6 +43,7 @@ function gamelab_devtest_send_smtp_mail(string $to, string $subject, string $bod
     // while GameLab uses a separate root. Reuse existing installed copies.
     $root = dirname(__DIR__);
     $paths = [
+        trim((string)($env['GAMELAB_PHPMAILER_SRC'] ?? '')),
         $root . '/includes/PHPMailer/src',
         $root . '/wow/includes/PHPMailer/src',
         '/var/www/stimpack/includes/PHPMailer/src',
