@@ -212,8 +212,11 @@ require dirname(__DIR__) . '/includes/header.php';
 .devtest-button.primary{background:#028be3;border-color:#029fe4;color:white}
 .devtest-button.complete{background:#167953;border-color:#239e70}
 .devtest-button.muted{background:#12283b;border-color:#2c5776}
-.devtest-card{padding:24px;border:1px solid #234d6d;border-radius:13px;background:linear-gradient(140deg,#0e263c,#091c2f);margin-bottom:14px}
+.devtest-card{position:relative;padding:24px;border:1px solid #234d6d;border-radius:13px;background:linear-gradient(140deg,#0e263c,#091c2f);margin-bottom:14px}
 .devtest-card h3{font-size:22px;margin:4px 0 10px}
+@media(min-width:951px){
+  .devtest-card.has-play-qr h3{max-width:calc(50% - 20px)}
+}
 .devtest-card p{white-space:pre-line;color:#b1c8d9;margin:12px 0;overflow-wrap:anywhere}
 .devtest-card .devtest-description{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;margin:12px 0 0}
 .devtest-card .devtest-description.is-expanded{white-space:pre-line;overflow:visible;text-overflow:clip}
@@ -222,9 +225,12 @@ require dirname(__DIR__) . '/includes/header.php';
 .devtest-card-toolbar .devtest-button{white-space:nowrap}
 .devtest-card-toolbar form{display:inline-flex;margin:0}
 .devtest-card-toolbar a.devtest-button{color:#fff;text-decoration:none;overflow-wrap:normal}
-.devtest-card-toolbar .devtest-play-qr{display:inline-flex;align-items:center;justify-content:center;width:90px;height:90px;padding:5px;box-sizing:border-box;background:#fff;border:1px solid #bdcbd6;border-radius:9px;flex-shrink:0;text-decoration:none}
+.devtest-card .devtest-play-qr{position:absolute;left:50%;top:14px;display:inline-flex;align-items:center;justify-content:center;width:90px;height:90px;padding:5px;box-sizing:border-box;background:#fff;border:1px solid #bdcbd6;border-radius:9px;text-decoration:none;z-index:1}
 .devtest-play-qr-code,.devtest-play-qr-code img,.devtest-play-qr-code canvas{display:block;width:80px;height:80px;min-width:80px;min-height:80px}
-.devtest-card-toolbar .devtest-play-qr:hover{border-color:#14b8ff;box-shadow:0 0 0 2px rgba(20,184,255,.22)}
+.devtest-card .devtest-play-qr:hover{border-color:#14b8ff;box-shadow:0 0 0 2px rgba(20,184,255,.22)}
+@media(max-width:950px){
+  .devtest-card .devtest-play-qr{position:static;float:right;margin:0 12px 10px}
+}
 
 
 .devtest-meta{display:flex;gap:9px 20px;flex-wrap:wrap;color:#86acc9;font-size:13px}
@@ -259,6 +265,7 @@ require dirname(__DIR__) . '/includes/header.php';
   .devtest-hero h1{font-size:33px}
   .devtest-form-grid,.devtest-form-grid.media{grid-template-columns:1fr;gap:0}
   .devtest-cover{float:none;display:block;max-width:100%;width:100%;max-height:220px;margin:0 0 14px}
+  .devtest-card .devtest-play-qr{margin:0 0 10px 12px}
   .devtest-tab .devtest-count{font-size:14px}
   .devtest-card{padding:18px}
   .devtest-actions h2{font-size:22px}
@@ -395,9 +402,18 @@ require dirname(__DIR__) . '/includes/header.php';
             <div class="devtest-empty">현재 <?= e($tabNames[$tab]) ?> 앱이 없습니다.</div>
         <?php else: ?>
             <?php foreach ($projects as $project): ?>
-                <article class="devtest-card" id="devtest-project-<?= (int)$project['id'] ?>">
+                <article class="devtest-card<?= !empty($project['play_url']) ? ' has-play-qr' : '' ?>" id="devtest-project-<?= (int)$project['id'] ?>">
                     <?php if (!empty($project['image_path'])): ?>
                         <img class="devtest-cover" src="<?= e((string)$project['image_path']) ?>" alt="<?= e((string)$project['title']) ?> 대표 이미지" loading="lazy">
+                    <?php endif; ?>
+                    <?php if (!empty($project['play_url'])): ?>
+                        <a class="devtest-play-qr"
+                           href="<?= e((string)$project['play_url']) ?>"
+                           target="_blank" rel="noopener noreferrer"
+                           title="Google Play QR" aria-label="<?= e((string)$project['title']) ?> Google Play QR">
+                            <span class="devtest-play-qr-code" data-qr-url="<?= e((string)$project['play_url']) ?>"
+                                  role="img" aria-label="Google Play 주소 QR 코드"></span>
+                        </a>
                     <?php endif; ?>
                     <h3><?= e((string)$project['title']) ?></h3>
                     <div class="devtest-meta">
@@ -455,15 +471,6 @@ require dirname(__DIR__) . '/includes/header.php';
                                     <button class="devtest-button complete" type="submit">완료</button>
                                 </form>
                             <?php endif; ?>
-                        <?php endif; ?>
-                        <?php if (!empty($project['play_url'])): ?>
-                            <a class="devtest-play-qr"
-                               href="<?= e((string)$project['play_url']) ?>"
-                               target="_blank" rel="noopener noreferrer"
-                               title="Google Play QR" aria-label="<?= e((string)$project['title']) ?> Google Play QR">
-                                <span class="devtest-play-qr-code" data-qr-url="<?= e((string)$project['play_url']) ?>"
-                                      role="img" aria-label="Google Play 주소 QR 코드"></span>
-                            </a>
                         <?php endif; ?>
                     </div>
                     <?php if ($project['status'] === 'recruiting'
