@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/devtest_mail.php';
 
 /**
  * Self-hosted GameLab development tests; independent of Google Play programs.
@@ -377,55 +378,39 @@ function gamelab_devtest_join(PDO $db, array $viewer, int $projectId, string $ap
         throw $error;
     }
 
-    // Fixed From headers. The participant email belongs only in the body.
+    // WoW-compatible authenticated Gmail SMTP; the sender is configured by
+    // GMAIL_SMTP_FROM and the only recipient is the verified original owner.
     $safeTitle = str_replace(["\r", "\n"], ' ', $projectTitle);
     $subjectText = '[STIMPACK GAME LAB] 개발테스트 참여 신청: ' . $safeTitle;
-    $subject = function_exists('mb_encode_mimeheader')
-        ? mb_encode_mimeheader($subjectText, 'UTF-8', 'B', "\r\n")
-        : '[STIMPACK GAME LAB] 개발테스트 참여 신청';
     $body = "STIMPACK GAME LAB 개발테스트 참여 신청\n\n"
         . "앱: " . $safeTitle . "\n"
         . "테스트 참여 희망 이메일: " . $applicantEmail . "\n"
         . "신청일시: " . date('Y-m-d H:i:s') . "\n\n"
-        . "홈페이지에서 참여 의사를 전달한 것입니다. 실제 Google Play 테스터 추가나 앱 설치는 자동으로 처리되지 않습니다.\n"
-        . "위 이메일로 신청자에게 연락하여 참여 방법을 안내해 주세요.\n";
-    $headers = implode("\r\n", [
-        'MIME-Version: 1.0',
-        'Content-Type: text/plain; charset=UTF-8',
-        'From: STIMPACK GAME LAB <noreply@stimpack.pe.kr>',
-    ]);
-    // PHP mail() may accept a message that is later bounced by the local MTA.
-    // Capture transport-level PHP warnings to aid server-side diagnosis.
-    $mailWarning = '';
-    set_error_handler(static function (int $severity, string $message) use (&$mailWarning): bool {
-        $mailWarning = $message;
-        return true;
-    }, E_WARNING);
+        . "이 메일은 STIMPACK의 인증 SMTP 계정에서 발송되었습니다.\n"
+        . "홈페이지에서 참여 의사를 전달한 것이며 실제 Google Play 테스터 추가나 앱 설치는 자동으로 처리되지 않습니다.\n"
+        . "신청자에게 위 이메일로 직접 연락하여 참여 방법을 안내해 주세요.\n";
     try {
-        $queued = mail($recipient, $subject, $body, $headers);
-    } finally {
-        restore_error_handler();
-    }
-    if (!$queued) {
-        error_log('[GAME LAB DEVTEST] PHP mail() rejected project #' . $projectId
-            . ' application #' . $applicationId
-            . ($mailWarning !== '' ? ' reason: ' . $mailWarning : ' reason: mail() returned false'));
-        // Permit an explicit retry if the local mail transport rejected it.
+        gamelab_devtest_send_smtp_mail($recipient, $subjectText, $body);
+    } catch (Throwable $error) {
+        // SMTP rejected this send; release the unique application lock so
+        // the tester can try again after the mail service is repaired.
         try {
             $remove = $db->prepare('
                 DELETE FROM gamelab_devtest_applications
                 WHERE id = ? AND mail_sent_at IS NULL
             ');
             $remove->execute([$applicationId]);
-        } catch (Throwable $error) {
-            error_log('[GAME LAB DEVTEST] failed to clean up mail request: ' . $error->getMessage());
+        } catch (Throwable $cleanupError) {
+            error_log('[GAME LAB DEVTEST] failed to clean up SMTP request: ' . $cleanupError->getMessage());
         }
-        error_log('[GAME LAB DEVTEST] mail transport rejected participation request, project #' . $projectId);
-        throw new RuntimeException('메일 서버가 발송 요청을 접수하지 못했습니다. 잠시 후 다시 신청해 주세요.');
+        error_log('[GAME LAB DEVTEST] SMTP delivery request failed, project #' . $projectId);
+        if ($error instanceof RuntimeException) {
+            throw $error;
+        }
+        throw new RuntimeException('테스터 신청 이메일 발송 중 오류가 발생했습니다.');
     }
-    // Acceptance by sendmail is not proof of remote delivery.
-    error_log('[GAME LAB DEVTEST] PHP mail() accepted project #' . $projectId
-        . ' application #' . $applicationId . ' (delivery unconfirmed)');
+    error_log('[GAME LAB DEVTEST] SMTP accepted project #' . $projectId
+        . ' application #' . $applicationId . ' (recipient delivery unconfirmed)');
     try {
         $mark = $db->prepare('
             UPDATE gamelab_devtest_applications
