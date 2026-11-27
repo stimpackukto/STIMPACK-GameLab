@@ -1172,7 +1172,7 @@ require __DIR__ . '/includes/header.php';
 
                             <a
                                 class="home-game-action"
-                                href="/games/<?= $gameSlug !== '' ? '#' . rawurlencode($gameSlug) : '' ?>"
+                                href="<?= e($gameUrl) ?>"
                             >
 
                                 <?= e(
