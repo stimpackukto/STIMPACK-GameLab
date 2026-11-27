@@ -1,3 +1,21 @@
+## 이메일 오너 확인 기능 서버 적용 (2026-11-27)
+
+**먼저** 기존 `gamelab` DB에 새 컬럼만 추가한다. 기존 데이터는 보존되며 이전 요청은 `owner_confirmed_at=NULL`로 유지된다.
+
+```bash
+cd /var/www/gamelab
+mysql gamelab < sql/20261127_devtest_owner_confirm.sql
+```
+
+- 위 `ALTER TABLE`은 **한 번만** 실행. 두 번째 실행 시 중복 컬럼 오류 발생
+- 이후 `test/index.php`, `test/confirm.php`, `api/devtest/confirm.php`, `includes/devtest.php`, `includes/devtest_mail.php` 배포
+- 기존 Google OAuth 설정(허용된 `/test/` 반환 경로)은 수정할 필요 없음. 확인 페이지에서 로그인하면 기존 OAuth 흐름을 통해 확인 화면으로 복귀
+- 비로그인 상태의 이메일 버튼 클릭 → Google 로그인 → 확인 화면 → 최종 확인
+- 다른 Google 계정으로 로그인한 상태에서는 403 응답. 임의의 POST로 다른 소유자의 신청을 확인할 수 없음
+- 이메일 앱의 GET 미리보기/검색 엔진 요청만으로 상태가 변하면 안 됨
+- 신청자에서 페이지 새로고침 후 `오너 확인` 표시 확인. `recruited_count`는 변경되지 않아야 함
+- 메일 전송은 HTML 버튼과 텍스트 링크 대체 본문을 모두 제공; 기존 WoW Gmail SMTP 계정 그대로 사용
+
 # STIMPACK GAME LAB 자체 개발테스트 센터
 
 URL: /test/ (기존 헤더의 '개발테스트' 메뉴)
@@ -10,6 +28,11 @@ URL: /test/ (기존 헤더의 '개발테스트' 메뉴)
 - 카드에는 대표 이미지와 영상 링크, Google Play 링크가 등록된 경우 'Google Play' 버튼을 표시. 모집 중인 타인 앱에는 '테스트 참여' 버튼을 표시
 - '테스트 참여' 클릭 → 대화상자에서 참여할 이메일 입력 → 신청 기록 → **WoW와 동일한 PHPMailer + Gmail SMTP**로 등록 당시 소유자 구글 인증 이메일에 전송
 - 로그인한 Google sub마다 앱별 신청 1회(중복 불가). 앱 등록자는 자기 앱에 신청 불가
+- **이메일 하단에 '오너 확인' 버튼** 추가. `https://stimpack.pe.kr/test/confirm.php?application_id=N` 으로 이동
+- 메일 URL GET은 절대 DB를 변경하지 않음(메일 앱의 링크 미리보기·자동 스캔 대비). 본인 Google 로그인 후 확인 화면의 `오너 확인 완료` 버튼 POST → `/api/devtest/confirm.php`
+- API는 Google sub로 프로젝트 실제 소유자와 일치하는지 확인하고 CSRF 검사. 확인 시간 `owner_confirmed_at` 저장; 재확인은 멱등 처리
+- 테스터 본인에게는 `신청 완료` → `오너 확인` 버튼으로 표시 변경(새로고침 시 반영). 이는 신청서 수신 확인일 뿐 테스터 승인·설치 인증이 아님
+- 이미 발송된 기존 이메일에는 링크가 없으며, 과거 신청 기록은 그대로 유지됨. 자동 재발송은 하지 않음
 - 신청 이메일은 입력한 문자열을 앱 소유자에게 알려주며 별도 이메일 소유 확인은 하지 않음. 앱 설치·Play 테스트 등록이나 모집 완료 인원 자동 집계는 수행하지 않음
 - SMTP 발송 성공은 SMTP 서버에 제출 성공을 의미하며 실제 수신함 도착까지 보장하지 않음
 - 이미지 교체·삭제 가능. 수정 시 새 이미지를 올리지 않으면 기존 이미지 유지
