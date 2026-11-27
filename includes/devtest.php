@@ -315,3 +315,112 @@ function gamelab_devtest_transition(PDO $db, array $user, int $id, string $actio
         throw $error;
     }
 }
+
+
+/**
+ * Website-only expression of interest. No Play Store enrollment is performed.
+ * Mail target comes ONLY from the project owner's verified Google email saved
+ * at project creation, never from a client-supplied recipient.
+ */
+function gamelab_devtest_join(PDO $db, array $viewer, int $projectId, string $applicantEmail): void
+{
+    $applicantEmail = trim($applicantEmail);
+    if (strlen($applicantEmail) > 254 || strpbrk($applicantEmail, "\r\n") !== false
+        || !filter_var($applicantEmail, FILTER_VALIDATE_EMAIL)) {
+        throw new RuntimeException('테스트에 참여할 이메일을 올바르게 입력해 주세요.');
+    }
+
+    $db->beginTransaction();
+    try {
+        $stmt = $db->prepare('
+            SELECT id, title, owner_google_sub, owner_email, status, recruited_count, target_count
+            FROM gamelab_devtest_projects WHERE id = ? LIMIT 1 FOR UPDATE
+        ');
+        $stmt->execute([$projectId]);
+        $project = $stmt->fetch();
+        if ($project === false || $project['status'] !== 'recruiting') {
+            throw new RuntimeException('현재 테스터 모집 중인 앱만 신청할 수 있습니다.');
+        }
+        if ((int)$project['recruited_count'] >= (int)$project['target_count']) {
+            throw new RuntimeException('이 앱은 목표 모집 인원에 도달했습니다.');
+        }
+        if (hash_equals((string)$project['owner_google_sub'], (string)$viewer['sub'])) {
+            throw new RuntimeException('본인이 등록한 앱에는 테스트 참여 신청을 할 수 없습니다.');
+        }
+
+        $recipient = strtolower(trim((string)$project['owner_email']));
+        if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)
+            || strpbrk($recipient, "\r\n") !== false) {
+            throw new RuntimeException('앱 등록자의 인증 이메일을 확인할 수 없습니다.');
+        }
+
+        $limit = $db->prepare('
+            SELECT COUNT(*) FROM gamelab_devtest_applications
+            WHERE applicant_google_sub = ? AND requested_at >= NOW() - INTERVAL 1 DAY
+        ');
+        $limit->execute([$viewer['sub']]);
+        if ((int)$limit->fetchColumn() >= 5) {
+            throw new RuntimeException('하루에 최대 5개 앱에만 참여 신청할 수 있습니다.');
+        }
+
+        $insert = $db->prepare('
+            INSERT INTO gamelab_devtest_applications
+                (project_id, applicant_google_sub, applicant_email)
+            VALUES (?, ?, ?)
+        ');
+        try {
+            $insert->execute([$projectId, $viewer['sub'], $applicantEmail]);
+        } catch (PDOException $error) {
+            if ((string)$error->getCode() === '23000') {
+                throw new RuntimeException('이 앱에는 이미 참여 신청한 기록이 있습니다.');
+            }
+            throw $error;
+        }
+        $applicationId = (int)$db->lastInsertId();
+        $projectTitle = trim((string)$project['title']);
+        $db->commit();
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $error;
+    }
+
+    // Fixed From headers. The participant email belongs only in the body.
+    $safeTitle = str_replace(["\r", "\n"], ' ', $projectTitle);
+    $subjectText = '[STIMPACK GAME LAB] 개발테스트 참여 신청: ' . $safeTitle;
+    $subject = function_exists('mb_encode_mimeheader')
+        ? mb_encode_mimeheader($subjectText, 'UTF-8', 'B', "\r\n")
+        : '[STIMPACK GAME LAB] 개발테스트 참여 신청';
+    $body = "STIMPACK GAME LAB 개발테스트 참여 신청\n\n"
+        . "앱: " . $safeTitle . "\n"
+        . "테스트 참여 희망 이메일: " . $applicantEmail . "\n"
+        . "신청일시: " . date('Y-m-d H:i:s') . "\n\n"
+        . "홈페이지에서 참여 의사를 전달한 것입니다. 실제 Google Play 테스터 추가나 앱 설치는 자동으로 처리되지 않습니다.\n"
+        . "위 이메일로 신청자에게 연락하여 참여 방법을 안내해 주세요.\n";
+    $headers = implode("\r\n", [
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=UTF-8',
+        'From: STIMPACK GAME LAB <noreply@stimpack.pe.kr>',
+    ]);
+    $queued = @mail($recipient, $subject, $body, $headers);
+    if (!$queued) {
+        // Permit an explicit retry if the local mail transport rejected it.
+        try {
+            $remove = $db->prepare('
+                DELETE FROM gamelab_devtest_applications
+                WHERE id = ? AND mail_sent_at IS NULL
+            ');
+            $remove->execute([$applicationId]);
+        } catch (Throwable $error) {
+            error_log('[GAME LAB DEVTEST] failed to clean up mail request: ' . $error->getMessage());
+        }
+        error_log('[GAME LAB DEVTEST] mail transport rejected participation request, project #' . $projectId);
+        throw new RuntimeException('메일 서버가 발송 요청을 접수하지 못했습니다. 잠시 후 다시 신청해 주세요.');
+    }
+    $mark = $db->prepare('
+        UPDATE gamelab_devtest_applications
+        SET mail_sent_at = NOW() WHERE id = ?
+    ');
+    $mark->execute([$applicationId]);
+}
