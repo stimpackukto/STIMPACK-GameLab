@@ -400,19 +400,40 @@ function gamelab_devtest_join(PDO $db, array $viewer, int $projectId, string $ap
         throw $error;
     }
 
-    // WoW-compatible authenticated Gmail SMTP; the sender is configured by
-    // GMAIL_SMTP_FROM and the only recipient is the verified original owner.
+    // Authenticated WoW SMTP sender. A link in the mail opens a confirmation
+    // page; the GET link itself never changes the database.
     $safeTitle = str_replace(["\r", "\n"], ' ', $projectTitle);
+    $confirmUrl = 'https://stimpack.pe.kr/test/confirm.php?application_id=' . $applicationId;
     $subjectText = '[STIMPACK GAME LAB] 개발테스트 참여 신청: ' . $safeTitle;
     $body = "STIMPACK GAME LAB 개발테스트 참여 신청\n\n"
         . "앱: " . $safeTitle . "\n"
         . "테스트 참여 희망 이메일: " . $applicantEmail . "\n"
         . "신청일시: " . date('Y-m-d H:i:s') . "\n\n"
-        . "이 메일은 STIMPACK의 인증 SMTP 계정에서 발송되었습니다.\n"
-        . "홈페이지에서 참여 의사를 전달한 것이며 실제 Google Play 테스터 추가나 앱 설치는 자동으로 처리되지 않습니다.\n"
-        . "신청자에게 위 이메일로 직접 연락하여 참여 방법을 안내해 주세요.\n";
+        . "신청 내용을 확인하려면 다음 주소에 접속하여 구글 인증 계정으로 확인해 주세요.\n"
+        . $confirmUrl . "\n\n"
+        . "이 메일은 STIMPACK 인증 SMTP 계정에서 발송되었습니다.\n"
+        . "오너 확인은 신청서 확인만 뜻하며 Google Play 테스터 등록/설치를 자동 처리하지 않습니다.\n"
+        . "신청자에게 위 이메일로 참여 방법을 안내해 주세요.\n";
+    $escTitle = htmlspecialchars($safeTitle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $escEmail = htmlspecialchars($applicantEmail, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $escConfirmUrl = htmlspecialchars($confirmUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $htmlBody = '<!doctype html><html lang="ko"><head><meta charset="UTF-8"></head>'
+        . '<body style="font-family:Arial,\'Malgun Gothic\',sans-serif;color:#142c40;line-height:1.65">'
+        . '<div style="max-width:560px;margin:auto;padding:24px;border:1px solid #d6e4ee;border-radius:12px">'
+        . '<h2 style="margin-top:0">STIMPACK GAME LAB 개발테스트 참여 신청</h2>'
+        . '<p><strong>앱:</strong> ' . $escTitle . '<br>'
+        . '<strong>테스트 참여 희망 이메일:</strong> ' . $escEmail . '<br>'
+        . '<strong>신청일시:</strong> ' . date('Y-m-d H:i:s') . '</p>'
+        . '<p>신청 이메일을 확인한 뒤 아래 버튼을 눌러 주세요.</p>'
+        . '<p style="margin:24px 0"><a href="' . $escConfirmUrl
+        . '" style="display:inline-block;background:#028be3;color:#fff;padding:12px 24px;border-radius:9px;text-decoration:none;font-weight:bold">오너 확인</a></p>'
+        . '<p style="color:#526a7a;font-size:13px">앱 소유자의 Google 인증 계정으로 로그인한 후 최종 확인해야 합니다. '
+        . '이 확인은 Google Play 테스터 등록이나 앱 설치를 의미하지 않습니다.</p>'
+        . '<p style="color:#526a7a;font-size:12px;overflow-wrap:anywhere">버튼이 열리지 않으면 주소를 복사하세요: '
+        . '<a href="' . $escConfirmUrl . '">' . $escConfirmUrl . '</a></p>'
+        . '</div></body></html>';
     try {
-        gamelab_devtest_send_smtp_mail($recipient, $subjectText, $body);
+        gamelab_devtest_send_smtp_mail($recipient, $subjectText, $body, $htmlBody);
     } catch (Throwable $error) {
         // SMTP rejected this send; release the unique application lock so
         // the tester can try again after the mail service is repaired.
@@ -443,5 +464,43 @@ function gamelab_devtest_join(PDO $db, array $viewer, int $projectId, string $ap
         // The mail server already accepted the message; do not report
         // submission failure or encourage duplicate notification attempts.
         error_log('[GAME LAB DEVTEST] mail accepted but timestamp update failed: ' . $error->getMessage());
+    }
+}
+
+/**
+ * Read one application and its project without granting any access.
+ * The caller MUST compare the current authenticated Google sub to owner_google_sub.
+ */
+function gamelab_devtest_application(PDO $db, int $applicationId): ?array
+{
+    $stmt = $db->prepare('
+        SELECT a.id, a.applicant_email, a.owner_confirmed_at,
+               p.id AS project_id, p.title, p.owner_google_sub
+        FROM gamelab_devtest_applications a
+        INNER JOIN gamelab_devtest_projects p ON p.id = a.project_id
+        WHERE a.id = ? LIMIT 1
+    ');
+    $stmt->execute([$applicationId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row === false ? null : $row;
+}
+
+/**
+ * Explicit POST only: verified project owner may acknowledge an application.
+ * Idempotent; repeat confirmation does not modify the timestamp.
+ */
+function gamelab_devtest_confirm_application(PDO $db, array $viewer, int $applicationId): void
+{
+    $stmt = $db->prepare('
+        UPDATE gamelab_devtest_applications a
+        INNER JOIN gamelab_devtest_projects p ON p.id = a.project_id
+        SET a.owner_confirmed_at = COALESCE(a.owner_confirmed_at, NOW())
+        WHERE a.id = ? AND p.owner_google_sub = ?
+    ');
+    $stmt->execute([$applicationId, $viewer['sub']]);
+    // No rowCount() check: matching, already-confirmed rows are idempotent.
+    $project = gamelab_devtest_application($db, $applicationId);
+    if ($project === null || !hash_equals((string)$project['owner_google_sub'], $viewer['sub'])) {
+        throw new RuntimeException('앱을 등록한 Google 계정만 신청을 확인할 수 있습니다.');
     }
 }
