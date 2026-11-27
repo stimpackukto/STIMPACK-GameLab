@@ -11,110 +11,80 @@
 })();
 
 /* =========================================================
- * GAME CLICK COUNTER
+ * GAME PLAY ATTEMPT COUNTER (public / no sign-in required)
  *
- * /games/{slug}/ 링크를 클릭할 때마다 서버에 +1.
- * 페이지 이동을 막지 않도록 sendBeacon/fetch keepalive 사용.
+ * Count a deliberate click on a registered game's launch URL. This works
+ * for links on both the home page and the /games/ catalog, including
+ * mixed-case folders such as /games/Baduk/.
+ * A visit to the game listing itself is NOT a game launch.
  * ========================================================= */
 (() => {
     const endpoint = '/api/game_click.php';
 
     const slugFromHref = (href) => {
         try {
-            const url = new URL(href, window.location.origin);
-
-            if (url.origin !== window.location.origin) {
-                return '';
-            }
+            const url = new URL(href, window.location.href);
+            if (url.origin !== window.location.origin) return '';
 
             const match = url.pathname.match(
-                /^\/games\/([a-zA-Z0-9_-]+)\/?$/
+                /^\/games\/([a-zA-Z0-9_-]{1,80})(?:\/(?:.*)?)?$/i
             );
-
             return match ? match[1].toLowerCase() : '';
-
         } catch (_) {
             return '';
         }
     };
 
-    const formatCount = (count) => {
-        return Number(count || 0).toLocaleString('ko-KR');
-    };
+    const formatCount = (count) => Number(count || 0).toLocaleString('ko-KR');
 
     const ensureCountBadge = (link, slug) => {
-        const article =
-            link.closest('article')
+        const article = link.closest('article')
             || link.closest('.project-row')
             || link.closest('.home-game-card')
             || link.parentElement;
+        if (!article) return null;
 
-        if (!article) {
-            return null;
-        }
+        const existing = article.querySelector('[data-game-count="' + slug + '"]');
+        if (existing) return existing;
 
-        const existing = article.querySelector(
-            '[data-game-count="' + CSS.escape(slug) + '"]'
-        );
-
-        if (existing) {
-            return existing;
-        }
-
-        /*
-         * /games/ 카드의 "웹게임 / 개발중" 뱃지 줄을 자동 탐색.
-         * 게임 페이지 소스가 Git에서 제외돼 있어도 공통 JS로 적용된다.
-         */
         const spans = Array.from(article.querySelectorAll('span'));
-
-        const webGameBadge = spans.find((el) =>
-            String(el.textContent || '').trim() === '웹게임'
-        );
-
-        const devBadge = spans.find((el) => {
+        const gameBadge = spans.find(el => String(el.textContent || '').trim() === '웹게임');
+        const devBadge = spans.find(el => {
             const text = String(el.textContent || '').trim();
             return text === '개발중' || text === '운영중' || text === '공개';
         });
-
-        const badgeRow =
-            (webGameBadge && webGameBadge.parentElement)
+        const badgeRow = (gameBadge && gameBadge.parentElement)
             || (devBadge && devBadge.parentElement)
             || article.querySelector('.home-game-badges');
-
-        if (!badgeRow) {
-            return null;
-        }
+        if (!badgeRow) return null;
 
         const badge = document.createElement('span');
         badge.className = 'game-play-count-badge';
         badge.dataset.gameCount = slug;
-        badge.textContent = '플레이 0회';
-
+        badge.textContent = '집계 확인 중';
         badgeRow.appendChild(badge);
-
         return badge;
     };
 
     const updateDisplays = (counts) => {
-        document.querySelectorAll('a[data-game-click-slug]').forEach((link) => {
-            const slug = String(
-                link.dataset.gameClickSlug || ''
-            ).toLowerCase();
-
-            if (slug) {
-                ensureCountBadge(link, slug);
-            }
+        document.querySelectorAll('a[data-game-click-slug]').forEach(link => {
+            const slug = link.dataset.gameClickSlug || '';
+            if (slug) ensureCountBadge(link, slug);
         });
 
-        document.querySelectorAll('[data-game-count]').forEach((el) => {
+        document.querySelectorAll('[data-game-count]').forEach(el => {
             const slug = String(el.dataset.gameCount || '').toLowerCase();
-
-            if (!slug) {
-                return;
+            if (slug) {
+                el.textContent = '플레이 ' + formatCount(counts[slug]) + '회';
+                el.removeAttribute('title');
             }
+        });
+    };
 
-            const count = Number(counts[slug] || 0);
-            el.textContent = '플레이 ' + formatCount(count) + '회';
+    const indicateError = () => {
+        document.querySelectorAll('[data-game-count]').forEach(el => {
+            el.textContent = '집계 확인 불가';
+            el.title = '게임 플레이 집계 API 또는 DB 설정을 확인해 주세요.';
         });
     };
 
@@ -125,47 +95,50 @@
                 credentials: 'same-origin',
                 cache: 'no-store'
             });
-
-            if (!response.ok) {
-                return;
-            }
-
+            if (!response.ok) throw new Error('Counter API HTTP ' + response.status);
             const data = await response.json();
-
-            if (data && data.ok && data.counts) {
-                updateDisplays(data.counts);
-            }
-        } catch (_) {
-            // 카운트 조회 실패가 페이지 이용을 방해하면 안 된다.
+            if (!data || !data.ok || !data.counts) throw new Error('Invalid counter API response');
+            updateDisplays(data.counts);
+        } catch (error) {
+            indicateError();
+            console.warn('[GAME LAB PLAY COUNT]', error);
         }
     };
 
-    document.querySelectorAll('a[href]').forEach((link) => {
-        const slug = slugFromHref(link.getAttribute('href') || '');
+    // Delegation handles links rendered or updated after script startup.
+    document.addEventListener('click', event => {
+        const target = event.target instanceof Element ? event.target : event.target.parentElement;
+        const link = target && target.closest('a[href]');
+        if (!link || event.defaultPrevented) return;
 
-        if (!slug) {
-            return;
+        const slug = slugFromHref(link.href);
+        if (!slug) return;
+
+        const body = new FormData();
+        body.append('slug', slug);
+
+        // A beacon survives page navigation and does not delay launching a game.
+        // If the browser rejects it, retry with keepalive fetch.
+        let sent = false;
+        if (typeof navigator.sendBeacon === 'function') {
+            sent = navigator.sendBeacon(endpoint, body);
         }
-
-        link.dataset.gameClickSlug = slug;
-
-        link.addEventListener('click', () => {
-            const body = new FormData();
-            body.append('slug', slug);
-
-            if (navigator.sendBeacon) {
-                navigator.sendBeacon(endpoint, body);
-                return;
-            }
-
+        if (!sent) {
             fetch(endpoint, {
                 method: 'POST',
                 body,
                 credentials: 'same-origin',
                 keepalive: true
             }).catch(() => {});
-        });
-    });
+        }
+    }, true);
 
+    // Read current counts on entry and after a game is closed/back navigation.
     loadCounts();
+    window.addEventListener('pageshow', event => {
+        if (event.persisted) loadCounts();
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') loadCounts();
+    });
 })();
