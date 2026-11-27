@@ -1131,7 +1131,7 @@ require __DIR__ . '/includes/header.php';
                                     class="game-play-count-badge"
                                     data-game-count="<?= e($gameSlug) ?>"
                                 >
-                                    플레이 0회
+                                    집계 확인 중
                                 </span>
                             <?php endif; ?>
 
