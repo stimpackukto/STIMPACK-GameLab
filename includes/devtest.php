@@ -423,6 +423,9 @@ function gamelab_devtest_join(PDO $db, array $viewer, int $projectId, string $ap
         error_log('[GAME LAB DEVTEST] mail transport rejected participation request, project #' . $projectId);
         throw new RuntimeException('메일 서버가 발송 요청을 접수하지 못했습니다. 잠시 후 다시 신청해 주세요.');
     }
+    // Acceptance by sendmail is not proof of remote delivery.
+    error_log('[GAME LAB DEVTEST] PHP mail() accepted project #' . $projectId
+        . ' application #' . $applicationId . ' (delivery unconfirmed)');
     try {
         $mark = $db->prepare('
             UPDATE gamelab_devtest_applications
