@@ -184,7 +184,7 @@ function gamelab_devtest_list(PDO $db, string $status): array
 function gamelab_devtest_owned_project(PDO $db, int $id, string $sub, bool $lock = false): array
 {
     $stmt = $db->prepare('
-        SELECT id, owner_google_sub, title, description, recruited_count, target_count,
+        SELECT id, owner_google_sub, owner_email, title, description, recruited_count, target_count,
                contact_email, image_path, video_url, status
         FROM gamelab_devtest_projects
         WHERE id = ? AND owner_google_sub = ?
