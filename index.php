@@ -63,6 +63,7 @@ $isGameLabAdmin =
  * ========================================================= */
 
 $homeCommunityPosts = [];
+$homeRecruitingProjects = [];
 
 try {
 
@@ -96,6 +97,24 @@ try {
     $homeCommunityPosts = [];
 }
 
+/*
+ * HOME - 현재 테스터 모집 중인 앱 (등록 최신순 6개)
+ * 공개 홈페이지 카드용 필드만 조회하며 소유자 이메일과 신청 내역은 노출하지 않음.
+ * DB에 문제가 있으면 홈 전체를 중단하지 않는다.
+ */
+try {
+    $stmt = gamelab_db()->query(
+        "SELECT id, title, description, image_path, recruited_count, target_count, created_at
+         FROM gamelab_devtest_projects
+         WHERE status = 'recruiting'
+         ORDER BY created_at DESC, id DESC
+         LIMIT 6"
+    );
+    $homeRecruitingProjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $error) {
+    error_log('[GAME LAB HOME] failed to load recruiting projects: ' . $error->getMessage());
+    $homeRecruitingProjects = [];
+}
 
 $pageTitle = SITE_NAME;
 
@@ -519,6 +538,104 @@ require __DIR__ . '/includes/header.php';
 
 
 /* =========================================================
+ * HOME - DEVELOPMENT TEST RECRUITING CARDS
+ * ========================================================= */
+.home-devtest-grid{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:20px;
+    align-items:stretch;
+}
+.home-devtest-card{
+    display:flex;
+    flex-direction:column;
+    height:100%;
+    min-width:0;
+    overflow:hidden;
+    border:1px solid rgba(44,139,196,.38);
+    border-radius:14px;
+    background:rgba(4,30,49,.68);
+    color:inherit;
+    text-decoration:none;
+    transition:border-color .15s,transform .15s;
+}
+.home-devtest-card:hover,.home-devtest-card:focus-visible{
+    border-color:#13adf4;
+    transform:translateY(-2px);
+}
+.home-devtest-image{
+    width:100%;
+    aspect-ratio:16/9;
+    object-fit:cover;
+    display:block;
+    background:#0b293f;
+}
+.home-devtest-image-placeholder{
+    width:100%;
+    aspect-ratio:16/9;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    background:linear-gradient(135deg,#123c57,#071b2d);
+    font-size:52px;
+}
+.home-devtest-copy{
+    display:flex;
+    flex:1;
+    min-width:0;
+    flex-direction:column;
+    padding:20px;
+}
+.home-devtest-status{
+    align-self:flex-start;
+    padding:5px 10px;
+    color:#8cdbff;
+    background:rgba(14,165,233,.14);
+    border-radius:999px;
+    font-size:12px;
+    font-weight:800;
+}
+.home-devtest-title{
+    font-size:19px;
+    line-height:1.4;
+    margin:12px 0 8px;
+    overflow:hidden;
+    display:-webkit-box;
+    -webkit-box-orient:vertical;
+    -webkit-line-clamp:2;
+}
+.home-devtest-description{
+    color:#b9d0e1;
+    font-size:14px;
+    line-height:1.6;
+    margin:0 0 16px;
+    white-space:pre-line;
+    overflow:hidden;
+    overflow-wrap:anywhere;
+    display:-webkit-box;
+    -webkit-box-orient:vertical;
+    -webkit-line-clamp:3;
+}
+.home-devtest-bottom{
+    margin-top:auto;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+    color:#a5c5dd;
+    font-size:13px;
+}
+.home-devtest-bottom strong{color:#4cc4ff}
+.home-devtest-empty{
+    padding:28px;
+    text-align:center;
+    border:1px dashed #285978;
+    border-radius:13px;
+    color:#b9d0e1;
+}
+
+/* =========================================================
  * TABLET
  * ========================================================= */
 
@@ -530,6 +647,8 @@ require __DIR__ . '/includes/header.php';
         grid-template-columns:
             repeat(2, minmax(0, 1fr));
     }
+
+    .home-devtest-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
 
 }
 
@@ -545,6 +664,8 @@ require __DIR__ . '/includes/header.php';
 
         grid-template-columns: 1fr;
     }
+
+    .home-devtest-grid{grid-template-columns:1fr;}
 
 
     .home-game-copy,
@@ -1404,140 +1525,36 @@ require __DIR__ . '/includes/header.php';
         </div>
 
 
-        <div class="simple-card-grid three">
-
-
-            <a
-                class="simple-card"
-                href="/test/"
-            >
-
-
-                <span class="simple-icon">
-
-                    👥
-
-                </span>
-
-
-                <div>
-
-
-                    <b>
-
-                        테스터 모집
-
-                    </b>
-
-
-                    <p>
-
-                        현재 모집 중인 테스트 프로젝트
-
-                    </p>
-
-
-                </div>
-
-
-                <strong>
-
-                    →
-
-                </strong>
-
-
-            </a>
-
-
-            <a
-                class="simple-card"
-                href="/test/"
-            >
-
-
-                <span class="simple-icon">
-
-                    📲
-
-                </span>
-
-
-                <div>
-
-
-                    <b>
-
-                        참여 가능한 앱
-
-                    </b>
-
-
-                    <p>
-
-                        지금 참여할 수 있는 비공개 테스트
-
-                    </p>
-
-
-                </div>
-
-
-                <strong>
-
-                    →
-
-                </strong>
-
-
-            </a>
-
-
-            <a
-                class="simple-card"
-                href="/test/"
-            >
-
-
-                <span class="simple-icon">
-
-                    ✅
-
-                </span>
-
-
-                <div>
-
-
-                    <b>
-
-                        완료된 테스트
-
-                    </b>
-
-
-                    <p>
-
-                        지난 테스트 결과와 업데이트 기록
-
-                    </p>
-
-
-                </div>
-
-
-                <strong>
-
-                    →
-
-                </strong>
-
-
-            </a>
-
-
-        </div>
-
+        <?php if ($homeRecruitingProjects): ?>
+            <div class="home-devtest-grid">
+                <?php foreach ($homeRecruitingProjects as $project): ?>
+                    <a class="home-devtest-card"
+                       href="/test/?tab=recruiting#devtest-project-<?= (int)$project['id'] ?>">
+                        <?php
+                        $cover = (string)($project['image_path'] ?? '');
+                        $validCover = preg_match('~^/uploads/devtest/[a-f0-9]{32}\\.(?:jpg|png|webp)$~D', $cover) === 1;
+                        ?>
+                        <?php if ($validCover): ?>
+                            <img class="home-devtest-image" src="<?= e($cover) ?>"
+                                 alt="<?= e((string)$project['title']) ?> 대표 이미지" loading="lazy">
+                        <?php else: ?>
+                            <div class="home-devtest-image-placeholder" aria-hidden="true">🧪</div>
+                        <?php endif; ?>
+                        <div class="home-devtest-copy">
+                            <span class="home-devtest-status">테스터 모집 중</span>
+                            <h3 class="home-devtest-title"><?= e((string)$project['title']) ?></h3>
+                            <p class="home-devtest-description"><?= e((string)$project['description']) ?></p>
+                            <div class="home-devtest-bottom">
+                                <span>모집 <?= number_format((int)$project['recruited_count']) ?> / <?= number_format((int)$project['target_count']) ?>명</span>
+                                <strong>자세히 보기 →</strong>
+                            </div>
+                        </div>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        <?php else: ?>
+            <div class="home-devtest-empty">현재 테스터를 모집 중인 앱이 없습니다.</div>
+        <?php endif; ?>
 
     </div>
 
