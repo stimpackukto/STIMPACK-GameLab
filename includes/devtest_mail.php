@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Reuses the WoW web site's PHPMailer + Gmail SMTP configuration.
  * Secrets live exclusively in /etc/trinity-web.env; never commit them.
  */
-function gamelab_devtest_send_smtp_mail(string $to, string $subject, string $body): void
+function gamelab_devtest_send_smtp_mail(string $to, string $subject, string $body, ?string $htmlBody = null): void
 {
     if (!filter_var($to, FILTER_VALIDATE_EMAIL) || preg_match('/[\r\n]/', $to)) {
         throw new RuntimeException('메일 수신 주소가 올바르지 않습니다.');
@@ -83,9 +83,12 @@ function gamelab_devtest_send_smtp_mail(string $to, string $subject, string $bod
         $mail->Timeout = 15;
         $mail->setFrom($from, $fromName);
         $mail->addAddress($to);
-        $mail->isHTML(false);
+        $mail->isHTML($htmlBody !== null);
         $mail->Subject = $subject;
-        $mail->Body = $body;
+        $mail->Body = $htmlBody ?? $body;
+        if ($htmlBody !== null) {
+            $mail->AltBody = $body;
+        }
         $mail->send();
     } catch (Throwable $error) {
         // No SMTP secrets, application email addresses, or message bodies in logs.
