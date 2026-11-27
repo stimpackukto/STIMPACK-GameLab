@@ -418,9 +418,15 @@ function gamelab_devtest_join(PDO $db, array $viewer, int $projectId, string $ap
         error_log('[GAME LAB DEVTEST] mail transport rejected participation request, project #' . $projectId);
         throw new RuntimeException('메일 서버가 발송 요청을 접수하지 못했습니다. 잠시 후 다시 신청해 주세요.');
     }
-    $mark = $db->prepare('
-        UPDATE gamelab_devtest_applications
-        SET mail_sent_at = NOW() WHERE id = ?
-    ');
-    $mark->execute([$applicationId]);
+    try {
+        $mark = $db->prepare('
+            UPDATE gamelab_devtest_applications
+            SET mail_sent_at = NOW() WHERE id = ?
+        ');
+        $mark->execute([$applicationId]);
+    } catch (Throwable $error) {
+        // The mail server already accepted the message; do not report
+        // submission failure or encourage duplicate notification attempts.
+        error_log('[GAME LAB DEVTEST] mail accepted but timestamp update failed: ' . $error->getMessage());
+    }
 }
