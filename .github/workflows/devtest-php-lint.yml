@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'test/**'
+      - 'api/devtest/**'
       - 'includes/devtest.php'
       - 'includes/devtest_mail.php'
       - 'auth/google_login.php'
@@ -31,6 +32,8 @@ jobs:
         run: |
           php -v
           php -l test/index.php
+          php -l test/confirm.php
+          php -l api/devtest/confirm.php
           php -l includes/devtest.php
           php -l includes/devtest_mail.php
           php -l auth/google_login.php
