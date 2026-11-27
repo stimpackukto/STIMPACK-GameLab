@@ -16,6 +16,7 @@ $tabNames = ['recruiting' => '모집 중', 'testing' => '테스트 중', 'comple
 $counts = ['recruiting' => 0, 'testing' => 0, 'completed' => 0];
 $projects = [];
 $active = null;
+$joinedProjectIds = [];
 $db = null;
 $databaseReady = true;
 $errorText = '';
@@ -24,11 +25,12 @@ $noticeText = [
     'edited' => '등록 정보가 수정되었습니다.',
     'started' => '앱이 테스트 중 목록으로 이동했습니다.',
     'completed' => '테스트 완료로 처리했습니다. 이제 새 앱을 등록할 수 있습니다.',
+    'joined' => '테스트 참여 신청이 접수되어 앱 등록자에게 이메일 발송을 요청했습니다.',
 ][(string)($_GET['saved'] ?? '')] ?? '';
 
 $formMode = '';
 $formProjectId = 0;
-$formValues = ['title' => '', 'description' => '', 'recruited_count' => '0', 'target_count' => '12', 'contact_email' => '', 'video_url' => '', 'image_path' => ''];
+$formValues = ['title' => '', 'description' => '', 'recruited_count' => '0', 'target_count' => '12', 'contact_email' => $viewer['email'] ?? '', 'video_url' => '', 'image_path' => ''];
 
 if ($viewer !== null) {
     try {
@@ -36,6 +38,7 @@ if ($viewer !== null) {
         // The DB migration is performed on the server before this page is deployed.
         $db->query('SELECT id, contact_email, image_path, video_url FROM gamelab_devtest_projects LIMIT 0');
         $db->query('SELECT owner_google_sub FROM gamelab_devtest_active_owners LIMIT 0');
+        $db->query('SELECT id FROM gamelab_devtest_applications LIMIT 0');
     } catch (Throwable $error) {
         $databaseReady = false;
         error_log('[GAME LAB DEVTEST] database initialization check failed: ' . $error->getMessage());
@@ -65,6 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $uploadedImagePath = null;
     try {
         if ($action === 'create') {
+            // The mail destination is always the verified registration identity.
+            $_POST['contact_email'] = $viewer['email'];
             $formMode = 'create';
             $formValues = [
                 'title' => (string)($_POST['title'] ?? ''),
@@ -84,7 +89,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         $id = gamelab_devtest_number($_POST['project_id'] ?? '', '앱 ID', 1, 100000000);
+        if ($action === 'join') {
+            gamelab_devtest_join($db, $viewer, $id, (string)($_POST['applicant_email'] ?? ''));
+            header('Location: /test/?tab=recruiting&saved=joined#devtest-projects', true, 303);
+            exit;
+        }
         if ($action === 'edit') {
+            $ownerProject = gamelab_devtest_owned_project($db, $id, $viewer['sub']);
+            $_POST['contact_email'] = (string)$ownerProject['owner_email'];
             $formMode = 'edit';
             $formProjectId = $id;
             $formValues = [
@@ -136,6 +148,9 @@ if ($viewer !== null && $databaseReady && $db instanceof PDO) {
         $counts = gamelab_devtest_counts($db);
         $active = gamelab_devtest_active($db, $viewer['sub']);
         $projects = gamelab_devtest_list($db, $tab);
+        $joinStmt = $db->prepare('SELECT project_id FROM gamelab_devtest_applications WHERE applicant_google_sub = ?');
+        $joinStmt->execute([$viewer['sub']]);
+        $joinedProjectIds = array_fill_keys(array_map('intval', $joinStmt->fetchAll(PDO::FETCH_COLUMN)), true);
 
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             if (isset($_GET['new']) && $active === null) {
@@ -156,7 +171,7 @@ if ($viewer !== null && $databaseReady && $db instanceof PDO) {
                     'description' => (string)$project['description'],
                     'recruited_count' => (string)$project['recruited_count'],
                     'target_count' => (string)$project['target_count'],
-                    'contact_email' => (string)($project['contact_email'] ?? ''),
+                    'contact_email' => (string)$project['owner_email'],
                     'video_url' => (string)($project['video_url'] ?? ''),
                     'image_path' => (string)($project['image_path'] ?? ''),
                 ];
@@ -211,6 +226,12 @@ require dirname(__DIR__) . '/includes/header.php';
 .devtest-links{display:flex;gap:12px 20px;flex-wrap:wrap;margin:13px 0;align-items:center}
 .devtest-links a{color:#80d5ff;text-decoration:underline;overflow-wrap:anywhere}
 .devtest-image-preview{max-width:200px;max-height:150px;object-fit:contain;border:1px solid #356585;border-radius:8px}
+.devtest-join-dialog{width:min(95vw,470px);padding:24px;background:#0b2238;color:#f5faff;border:1px solid #3f7197;border-radius:14px;box-shadow:0 24px 80px rgba(0,0,0,.65)}
+.devtest-join-dialog::backdrop{background:rgba(0,0,0,.72)}
+.devtest-join-dialog h3{font-size:22px;margin:0 0 14px}
+.devtest-join-dialog p{color:#b1c8d9;line-height:1.6;overflow-wrap:anywhere}
+.devtest-join-dialog .devtest-card-actions{justify-content:flex-end}
+.devtest-button[disabled]{opacity:.65;cursor:default}
 .devtest-empty{padding:28px;text-align:center;border:1px dashed #2b5572;border-radius:13px;color:#a3bbd0}
 .devtest-account{padding:17px 20px;background:#0b263c;border:1px solid #214e72;border-radius:12px;margin-bottom:18px}
 .devtest-account strong{color:#d8f1ff}
@@ -264,7 +285,7 @@ require dirname(__DIR__) . '/includes/header.php';
         </div>
     <?php elseif (!$databaseReady): ?>
         <div class="devtest-alert" role="alert">
-            개발테스트 DB가 준비되지 않았습니다. 관리자는 초기 테이블과 sql/20261127_devtest_media.sql 마이그레이션 적용 여부를 확인해 주세요.
+            개발테스트 DB가 준비되지 않았습니다. 관리자는 sql/20261127_devtest_projects.sql, sql/20261127_devtest_media.sql, sql/20261127_devtest_applications.sql 적용 여부를 확인해 주세요.
         </div>
     <?php else: ?>
         <div id="devtest-projects"></div>
@@ -316,8 +337,9 @@ require dirname(__DIR__) . '/includes/header.php';
                             <input id="devtest-target" name="target_count" type="number" min="1" max="100000" required value="<?= e((string)$formValues['target_count']) ?>">
                         </div>
                         <div class="devtest-field">
-                            <label for="devtest-contact">테스터 신청 접수 이메일</label>
-                            <input id="devtest-contact" name="contact_email" type="email" required maxlength="254" autocomplete="email" value="<?= e((string)$formValues['contact_email']) ?>" placeholder="예: tester@example.com">
+                            <label for="devtest-contact">테스터 신청 알림 이메일 (Google 인증)</label>
+                            <input id="devtest-contact" name="contact_email" type="email" required readonly maxlength="254" value="<?= e((string)$formValues['contact_email']) ?>">
+                            <small>앱 등록 때 인증된 구글 이메일로 참여 신청을 전달합니다. 임의로 변경할 수 없습니다.</small>
                         </div>
                     </div>
                     <div class="devtest-form-grid media">
@@ -365,13 +387,40 @@ require dirname(__DIR__) . '/includes/header.php';
                     </div>
                     <p><?= e((string)$project['description']) ?></p>
                     <div class="devtest-links">
-                        <?php if (!empty($project['contact_email'])): ?>
-                            <span>테스터 신청 접수: <a href="mailto:<?= e((string)$project['contact_email']) ?>"><?= e((string)$project['contact_email']) ?></a></span>
-                        <?php endif; ?>
                         <?php if (!empty($project['video_url'])): ?>
                             <a href="<?= e((string)$project['video_url']) ?>" target="_blank" rel="noopener noreferrer">▶ 소개 영상 보기 (유튜브·틱톡)</a>
                         <?php endif; ?>
                     </div>
+                    <?php if ($project['status'] === 'recruiting' && !hash_equals((string)$project['owner_google_sub'], $viewer['sub'])): ?>
+                        <div class="devtest-card-actions">
+                            <?php if (isset($joinedProjectIds[(int)$project['id']])): ?>
+                                <button class="devtest-button muted" type="button" disabled>신청 완료</button>
+                            <?php elseif ((int)$project['recruited_count'] >= (int)$project['target_count']): ?>
+                                <button class="devtest-button muted" type="button" disabled>모집 마감</button>
+                            <?php else: ?>
+                                <button class="devtest-button primary" type="button" data-join-dialog="devtest-join-<?= (int)$project['id'] ?>">테스트 참여</button>
+                                <dialog class="devtest-join-dialog" id="devtest-join-<?= (int)$project['id'] ?>">
+                                    <h3>테스트 참여 신청</h3>
+                                    <p><strong><?= e((string)$project['title']) ?></strong>에 테스트 참여 의사를 전달합니다.</p>
+                                    <form method="post" action="/test/">
+                                        <input type="hidden" name="csrf" value="<?= e(gamelab_csrf_token()) ?>">
+                                        <input type="hidden" name="action" value="join">
+                                        <input type="hidden" name="project_id" value="<?= (int)$project['id'] ?>">
+                                        <div class="devtest-field">
+                                            <label for="applicant-email-<?= (int)$project['id'] ?>">테스트에 참여할 이메일</label>
+                                            <input id="applicant-email-<?= (int)$project['id'] ?>" name="applicant_email" type="email" required maxlength="254" autocomplete="email" value="<?= e($viewer['email']) ?>" placeholder="you@example.com">
+                                            <small>이메일은 앱 등록자에게 전달됩니다. 입력한 이메일은 별도로 인증하지 않습니다.</small>
+                                        </div>
+                                        <p class="devtest-note">이 신청은 홈페이지 내 참여 의사 전달이며 Google Play 테스트 등록은 별도로 진행됩니다.</p>
+                                        <div class="devtest-card-actions">
+                                            <button class="devtest-button muted" type="button" data-close-dialog>취소</button>
+                                            <button class="devtest-button primary" type="submit">참여 신청 전송</button>
+                                        </div>
+                                    </form>
+                                </dialog>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
                     <?php if (hash_equals((string)$project['owner_google_sub'], $viewer['sub']) && $project['status'] !== 'completed'): ?>
                         <div class="devtest-card-actions">
                             <a class="devtest-button muted"
@@ -399,4 +448,19 @@ require dirname(__DIR__) . '/includes/header.php';
     <?php endif; ?>
 </div>
 </section>
+<script>
+document.addEventListener('click', function (event) {
+    const open = event.target.closest('[data-join-dialog]');
+    if (open) {
+        const dialog = document.getElementById(open.getAttribute('data-join-dialog'));
+        if (dialog && typeof dialog.showModal === 'function') dialog.showModal();
+        return;
+    }
+    const close = event.target.closest('[data-close-dialog]');
+    if (close) {
+        const dialog = close.closest('dialog');
+        if (dialog) dialog.close();
+    }
+});
+</script>
 <?php require dirname(__DIR__) . '/includes/footer.php'; ?>
