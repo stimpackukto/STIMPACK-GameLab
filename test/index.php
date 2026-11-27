@@ -28,13 +28,13 @@ $noticeText = [
 
 $formMode = '';
 $formProjectId = 0;
-$formValues = ['title' => '', 'description' => '', 'recruited_count' => '0', 'target_count' => '12'];
+$formValues = ['title' => '', 'description' => '', 'recruited_count' => '0', 'target_count' => '12', 'contact_email' => '', 'video_url' => '', 'image_path' => ''];
 
 if ($viewer !== null) {
     try {
         $db = gamelab_db();
         // The DB migration is performed on the server before this page is deployed.
-        $db->query('SELECT id FROM gamelab_devtest_projects LIMIT 0');
+        $db->query('SELECT id, contact_email, image_path, video_url FROM gamelab_devtest_projects LIMIT 0');
         $db->query('SELECT owner_google_sub FROM gamelab_devtest_active_owners LIMIT 0');
     } catch (Throwable $error) {
         $databaseReady = false;
@@ -62,6 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $tab = $postTab;
     }
 
+    $uploadedImagePath = null;
     try {
         if ($action === 'create') {
             $formMode = 'create';
@@ -70,8 +71,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'description' => (string)($_POST['description'] ?? ''),
                 'recruited_count' => (string)($_POST['recruited_count'] ?? ''),
                 'target_count' => (string)($_POST['target_count'] ?? ''),
+                'contact_email' => (string)($_POST['contact_email'] ?? ''),
+                'video_url' => (string)($_POST['video_url'] ?? ''),
+                'image_path' => '',
             ];
-            gamelab_devtest_create($db, $viewer, gamelab_devtest_form_values($_POST));
+            $values = gamelab_devtest_form_values($_POST);
+            $uploadedImagePath = gamelab_devtest_upload_image($_FILES['image'] ?? null);
+            $values['image_path'] = $uploadedImagePath;
+            gamelab_devtest_create($db, $viewer, $values);
+            $uploadedImagePath = null;
             header('Location: /test/?tab=recruiting&saved=created#devtest-projects', true, 303);
             exit;
         }
@@ -84,8 +92,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'description' => (string)($_POST['description'] ?? ''),
                 'recruited_count' => (string)($_POST['recruited_count'] ?? ''),
                 'target_count' => (string)($_POST['target_count'] ?? ''),
+                'contact_email' => (string)($_POST['contact_email'] ?? ''),
+                'video_url' => (string)($_POST['video_url'] ?? ''),
+                'image_path' => '',
             ];
-            gamelab_devtest_edit($db, $viewer, $id, gamelab_devtest_form_values($_POST));
+            $values = gamelab_devtest_form_values($_POST);
+            if (!empty($_POST['remove_image']) && !empty($_FILES['image']['name'])) {
+                throw new RuntimeException('대표 이미지 변경과 삭제는 동시에 선택할 수 없습니다.');
+            }
+            $uploadedImagePath = gamelab_devtest_upload_image($_FILES['image'] ?? null);
+            $values['image_path'] = $uploadedImagePath;
+            $values['remove_image'] = !empty($_POST['remove_image']);
+            gamelab_devtest_edit($db, $viewer, $id, $values);
+            $uploadedImagePath = null;
             header('Location: /test/?tab=' . rawurlencode($tab) . '&saved=edited#devtest-projects', true, 303);
             exit;
         }
@@ -101,9 +120,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         throw new RuntimeException('지원하지 않는 작업입니다.');
     } catch (RuntimeException $error) {
+        gamelab_devtest_delete_image($uploadedImagePath);
         $errorText = $error->getMessage();
         http_response_code(422);
     } catch (Throwable $error) {
+        gamelab_devtest_delete_image($uploadedImagePath);
         error_log('[GAME LAB DEVTEST] POST error: ' . $error->getMessage());
         $errorText = '처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
         http_response_code(500);
@@ -135,6 +156,9 @@ if ($viewer !== null && $databaseReady && $db instanceof PDO) {
                     'description' => (string)$project['description'],
                     'recruited_count' => (string)$project['recruited_count'],
                     'target_count' => (string)$project['target_count'],
+                    'contact_email' => (string)($project['contact_email'] ?? ''),
+                    'video_url' => (string)($project['video_url'] ?? ''),
+                    'image_path' => (string)($project['image_path'] ?? ''),
                 ];
             }
         }
@@ -179,13 +203,21 @@ require dirname(__DIR__) . '/includes/header.php';
 .devtest-field label{font-weight:750;color:#e2f0fa}
 .devtest-field input,.devtest-field textarea{display:block;width:100%;background:#061626;color:#fff;border:1px solid #356585;padding:12px;border-radius:9px;font:inherit}
 .devtest-field input:focus,.devtest-field textarea:focus{outline:2px solid #159bdd;outline-offset:1px}
-.devtest-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px}
+.devtest-form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px}
+.devtest-form-grid.media{grid-template-columns:repeat(2,minmax(0,1fr))}
+.devtest-field small{font-size:12px;color:#9bbbd1;line-height:1.5}
+.devtest-cover{width:210px;max-width:35%;aspect-ratio:4/3;object-fit:cover;float:right;margin:0 0 12px 20px;border-radius:10px;border:1px solid #356585}
+.devtest-card{display:flow-root}
+.devtest-links{display:flex;gap:12px 20px;flex-wrap:wrap;margin:13px 0;align-items:center}
+.devtest-links a{color:#80d5ff;text-decoration:underline;overflow-wrap:anywhere}
+.devtest-image-preview{max-width:200px;max-height:150px;object-fit:contain;border:1px solid #356585;border-radius:8px}
 .devtest-empty{padding:28px;text-align:center;border:1px dashed #2b5572;border-radius:13px;color:#a3bbd0}
 .devtest-account{padding:17px 20px;background:#0b263c;border:1px solid #214e72;border-radius:12px;margin-bottom:18px}
 .devtest-account strong{color:#d8f1ff}
 @media(max-width:700px){
   .devtest-hero h1{font-size:33px}
-  .devtest-form-grid{grid-template-columns:1fr;gap:0}
+  .devtest-form-grid,.devtest-form-grid.media{grid-template-columns:1fr;gap:0}
+  .devtest-cover{float:none;display:block;max-width:100%;width:100%;max-height:220px;margin:0 0 14px}
   .devtest-tab .devtest-count{font-size:14px}
   .devtest-card{padding:18px}
   .devtest-actions h2{font-size:22px}
@@ -232,7 +264,7 @@ require dirname(__DIR__) . '/includes/header.php';
         </div>
     <?php elseif (!$databaseReady): ?>
         <div class="devtest-alert" role="alert">
-            개발테스트 DB가 준비되지 않았습니다. 관리자는 sql/20261127_devtest_projects.sql 설치 여부를 확인해 주세요.
+            개발테스트 DB가 준비되지 않았습니다. 관리자는 초기 테이블과 sql/20261127_devtest_media.sql 마이그레이션 적용 여부를 확인해 주세요.
         </div>
     <?php else: ?>
         <div id="devtest-projects"></div>
@@ -259,7 +291,7 @@ require dirname(__DIR__) . '/includes/header.php';
         <?php if ($formMode !== ''): ?>
             <div class="devtest-form" id="project-form">
                 <h3><?= $formMode === 'edit' ? '앱 정보 수정' : '모집할 앱 등록' ?></h3>
-                <form method="post" action="/test/?tab=<?= e($tab) ?>#project-form">
+                <form method="post" enctype="multipart/form-data" action="/test/?tab=<?= e($tab) ?>#project-form">
                     <input type="hidden" name="csrf" value="<?= e(gamelab_csrf_token()) ?>">
                     <input type="hidden" name="action" value="<?= e($formMode) ?>">
                     <input type="hidden" name="tab" value="<?= e($tab) ?>">
@@ -283,6 +315,26 @@ require dirname(__DIR__) . '/includes/header.php';
                             <label for="devtest-target">목표 모집 인원</label>
                             <input id="devtest-target" name="target_count" type="number" min="1" max="100000" required value="<?= e((string)$formValues['target_count']) ?>">
                         </div>
+                        <div class="devtest-field">
+                            <label for="devtest-contact">테스터 신청 접수 이메일</label>
+                            <input id="devtest-contact" name="contact_email" type="email" required maxlength="254" autocomplete="email" value="<?= e((string)$formValues['contact_email']) ?>" placeholder="예: tester@example.com">
+                        </div>
+                    </div>
+                    <div class="devtest-form-grid media">
+                        <div class="devtest-field">
+                            <label for="devtest-image">대표 이미지 (1장)</label>
+                            <input id="devtest-image" name="image" type="file" accept="image/jpeg,image/png,image/webp">
+                            <small>JPG · PNG · WEBP, 최대 5MB. 새 이미지 선택 시 기존 이미지를 교체합니다.</small>
+                            <?php if ($formMode === 'edit' && $formValues['image_path'] !== ''): ?>
+                                <img class="devtest-image-preview" src="<?= e((string)$formValues['image_path']) ?>" alt="등록된 대표 이미지">
+                                <label><input type="checkbox" name="remove_image" value="1"> 기존 이미지 삭제</label>
+                            <?php endif; ?>
+                        </div>
+                        <div class="devtest-field">
+                            <label for="devtest-video">소개 영상 링크 (선택)</label>
+                            <input id="devtest-video" name="video_url" type="url" maxlength="500" value="<?= e((string)$formValues['video_url']) ?>" placeholder="https://www.youtube.com/... 또는 https://www.tiktok.com/...">
+                            <small>유튜브 · 쇼츠 · 틱톡 영상의 공유 링크를 입력해 주세요.</small>
+                        </div>
                     </div>
                     <div class="devtest-card-actions">
                         <button class="devtest-button primary" type="submit"><?= $formMode === 'edit' ? '수정 저장' : '모집 중에 등록' ?></button>
@@ -297,6 +349,9 @@ require dirname(__DIR__) . '/includes/header.php';
         <?php else: ?>
             <?php foreach ($projects as $project): ?>
                 <article class="devtest-card">
+                    <?php if (!empty($project['image_path'])): ?>
+                        <img class="devtest-cover" src="<?= e((string)$project['image_path']) ?>" alt="<?= e((string)$project['title']) ?> 대표 이미지" loading="lazy">
+                    <?php endif; ?>
                     <h3><?= e((string)$project['title']) ?></h3>
                     <div class="devtest-meta">
                         <span>현재 모집 <?= number_format((int)$project['recruited_count']) ?>명 / 목표 <?= number_format((int)$project['target_count']) ?>명</span>
@@ -309,6 +364,14 @@ require dirname(__DIR__) . '/includes/header.php';
                         <?php endif; ?>
                     </div>
                     <p><?= e((string)$project['description']) ?></p>
+                    <div class="devtest-links">
+                        <?php if (!empty($project['contact_email'])): ?>
+                            <span>테스터 신청 접수: <a href="mailto:<?= e((string)$project['contact_email']) ?>"><?= e((string)$project['contact_email']) ?></a></span>
+                        <?php endif; ?>
+                        <?php if (!empty($project['video_url'])): ?>
+                            <a href="<?= e((string)$project['video_url']) ?>" target="_blank" rel="noopener noreferrer">▶ 소개 영상 보기 (유튜브·틱톡)</a>
+                        <?php endif; ?>
+                    </div>
                     <?php if (hash_equals((string)$project['owner_google_sub'], $viewer['sub']) && $project['status'] !== 'completed'): ?>
                         <div class="devtest-card-actions">
                             <a class="devtest-button muted"
